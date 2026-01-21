@@ -1,0 +1,456 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String // bcrypt hash
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  persona Persona?
+
+  @@map("users")
+}
+
+enum Role {
+  USER
+  DECKER
+  SPIDER
+  GRIDGOD
+}
+
+model Persona {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  name        String
+  avatar      String?
+  address     String?
+  profession  String?
+  extraInfo   String?
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lls         Lls?
+  wallet      Wallet?
+  devices     Device[]
+  licenses    License[]
+  blogPosts   BlogPost[]
+  files       File[]
+  messagesAsSender   Message[] @relation("MessageSender")
+  messagesAsReceiver Message[] @relation("MessageReceiver")
+  hackSessionsAsAttacker HackSession[] @relation("HackSessionAttacker")
+  hackSessionsAsTarget   HackSession[] @relation("HackSessionTarget")
+  gridLogsAsActor   GridLog[] @relation("GridLogActor")
+  gridLogsAsTarget  GridLog[] @relation("GridLogTarget")
+  notifications Notification[]
+  ownedHosts  Host[] @relation("HostOwner")
+  spiderHosts Host[] @relation("HostSpider")
+  deckingKnownTargets DeckingKnownTarget[]
+  subscriptionsAsPayer Subscription[] @relation("SubscriptionPayer")
+  subscriptionsAsPayee Subscription[] @relation("SubscriptionPayee")
+  accessTokens AccessToken[]
+  paymentRequestsAsCreator PaymentRequest[] @relation("PaymentRequestCreator")
+  paymentRequestsAsTarget PaymentRequest[] @relation("PaymentRequestTarget")
+
+  @@map("personas")
+}
+
+model Lls {
+  id          String   @id @default(cuid())
+  personaId   String   @unique
+  sin         String   @unique // SIN номер
+  isPublic    Boolean  @default(false)
+  iceLevel    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  persona     Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@map("lls")
+}
+
+model Device {
+  id              String    @id @default(cuid())
+  code            String    @unique // код для привязки
+  type            DeviceType
+  name            String?
+  ownerPersonaId  String?
+  status          DeviceStatus @default(ACTIVE)
+  brickUntil      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  owner           Persona?  @relation(fields: [ownerPersonaId], references: [id], onDelete: SetNull)
+
+  @@map("devices")
+}
+
+enum DeviceType {
+  COMMLINK
+  DECK
+  OTHER
+}
+
+enum DeviceStatus {
+  ACTIVE
+  BRICKED
+}
+
+model License {
+  id          String   @id @default(cuid())
+  personaId   String
+  type        String
+  name        String
+  description String?
+  issuedAt    DateTime @default(now())
+  issuedBy    String? // gridgod personaId
+
+  persona     Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@map("licenses")
+}
+
+model Host {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  isPublic        Boolean  @default(false)
+  ownerPersonaId  String?
+  spiderPersonaId String?
+  iceLevel        Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  owner           Persona? @relation("HostOwner", fields: [ownerPersonaId], references: [id], onDelete: SetNull)
+  spider          Persona? @relation("HostSpider", fields: [spiderPersonaId], references: [id], onDelete: SetNull)
+  wallet          Wallet?
+  files           File[]
+  blogPosts       BlogPost[]
+  messagesAsSender   Message[] @relation("MessageHostSender")
+  messagesAsReceiver Message[] @relation("MessageHostReceiver")
+  hackSessions    HackSession[] @relation("HackSessionHostTarget")
+  gridLogs        GridLog[]
+  accessTokens    AccessToken[]
+  paymentRequestsAsCreator PaymentRequest[] @relation("PaymentRequestHostCreator")
+  paymentRequestsAsTarget  PaymentRequest[] @relation("PaymentRequestHostTarget")
+
+  @@map("hosts")
+}
+
+model File {
+  id          String   @id @default(cuid())
+  name        String
+  type        String?
+  size        Int?
+  content     String? // JSON или текст
+  isPublic    Boolean  @default(false)
+  redeemCode  String?  @unique
+  iceLevel    Int      @default(0)
+  personaId   String?
+  hostId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  persona     Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  host        Host?    @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@map("files")
+}
+
+model BlogPost {
+  id        String   @id @default(cuid())
+  text      String   @db.VarChar(70)
+  personaId String?
+  hostId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  persona   Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  host      Host?    @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@map("blog_posts")
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  balance   Decimal  @default(0) @db.Decimal(15, 2)
+  personaId String?  @unique
+  hostId    String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  persona   Persona? @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  host      Host?    @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@map("wallets")
+}
+
+model Transaction {
+  id             String           @id @default(cuid())
+  walletId       String
+  type           TransactionType
+  status         TransactionStatus @default(COMPLETED)
+  amount         Decimal          @db.Decimal(15, 2)
+  isTheft        Boolean          @default(false)
+  subscriptionId String?
+  paymentRequestId String?
+  metaJson       Json?
+  createdAt      DateTime         @default(now())
+
+  wallet         Wallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  subscription   Subscription?    @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  paymentRequest PaymentRequest?  @relation(fields: [paymentRequestId], references: [id], onDelete: SetNull)
+
+  @@index([walletId, createdAt])
+  @@map("transactions")
+}
+
+enum TransactionType {
+  TRANSFER
+  SUBSCRIPTION
+  SALARY
+  PAYMENT_REQUEST
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Subscription {
+  id            String   @id @default(cuid())
+  payerType     WalletOwnerType
+  payerId       String // personaId или hostId
+  payeeType     WalletOwnerType
+  payeeId       String
+  amountPerTick Decimal  @db.Decimal(15, 2)
+  periodSeconds Int      @default(3600)
+  lastChargedAt DateTime?
+  type          SubscriptionType
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  payerPersona  Persona? @relation("SubscriptionPayer", fields: [payerId], references: [id], onDelete: Cascade)
+  payeePersona  Persona? @relation("SubscriptionPayee", fields: [payeeId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+
+  @@index([payerType, payerId])
+  @@index([payeeType, payeeId])
+  @@map("subscriptions")
+}
+
+enum WalletOwnerType {
+  PERSONA
+  HOST
+}
+
+enum SubscriptionType {
+  SUBSCRIPTION
+  SALARY
+}
+
+model MessageThread {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages  Message[]
+
+  @@map("message_threads")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  threadId  String?
+  text      String   @db.VarChar(280)
+  senderType MessageTargetType
+  senderPersonaId  String?
+  senderHostId     String?
+  receiverType MessageTargetType
+  receiverPersonaId String?
+  receiverHostId    String?
+  createdAt DateTime @default(now())
+
+  thread    MessageThread? @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  senderPersona   Persona?  @relation("MessageSender", fields: [senderPersonaId], references: [id], onDelete: Cascade)
+  senderHost      Host?     @relation("MessageHostSender", fields: [senderHostId], references: [id], onDelete: Cascade)
+  receiverPersona Persona?  @relation("MessageReceiver", fields: [receiverPersonaId], references: [id], onDelete: Cascade)
+  receiverHost    Host?     @relation("MessageHostReceiver", fields: [receiverHostId], references: [id], onDelete: Cascade)
+
+  @@index([senderType, senderPersonaId])
+  @@index([receiverType, receiverPersonaId])
+  @@map("messages")
+}
+
+enum MessageTargetType {
+  PERSONA
+  HOST
+}
+
+model HackSession {
+  id                  String          @id @default(cuid())
+  attackerPersonaId   String
+  targetType          HackTargetType
+  targetPersonaId     String?
+  targetHostId        String?
+  elementType         String // LLS, FILE, DEVICE, etc
+  elementId           String?
+  status              HackSessionStatus @default(ACTIVE)
+  expiresAt           DateTime
+  consumedOperationAt DateTime?
+  iceLevel            Int             @default(0)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  attacker            Persona        @relation("HackSessionAttacker", fields: [attackerPersonaId], references: [id], onDelete: Cascade)
+  targetPersona       Persona?       @relation("HackSessionTarget", fields: [targetPersonaId], references: [id], onDelete: Cascade)
+  targetHost          Host?          @relation("HackSessionHostTarget", fields: [targetHostId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiresAt])
+  @@index([attackerPersonaId])
+  @@map("hack_sessions")
+}
+
+enum HackTargetType {
+  PERSONA
+  HOST
+}
+
+enum HackSessionStatus {
+  ACTIVE
+  SUCCESS
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+model GridLog {
+  id              String   @id @default(cuid())
+  type            String
+  actorPersonaId  String?
+  targetPersonaId String?
+  targetHostId    String?
+  metaJson        Json?
+  createdAt       DateTime @default(now())
+
+  actor           Persona? @relation("GridLogActor", fields: [actorPersonaId], references: [id], onDelete: SetNull)
+  targetPersona   Persona? @relation("GridLogTarget", fields: [targetPersonaId], references: [id], onDelete: SetNull)
+  targetHost      Host?    @relation(fields: [targetHostId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+  @@index([actorPersonaId])
+  @@index([targetPersonaId])
+  @@index([targetHostId])
+  @@map("grid_logs")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  personaId String
+  type      String
+  payload   Json?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  persona   Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@index([personaId, createdAt])
+  @@map("notifications")
+}
+
+model AccessToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  personaId String
+  hostId    String
+  purpose   String?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  persona   Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  host      Host    @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@map("access_tokens")
+}
+
+model PaymentRequest {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  creatorType WalletOwnerType
+  creatorPersonaId String?
+  creatorHostId    String?
+  targetType WalletOwnerType
+  targetPersonaId  String?
+  targetHostId     String?
+  amount    Decimal  @db.Decimal(15, 2)
+  purpose   String?
+  status   PaymentRequestStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+
+  creatorPersona Persona? @relation("PaymentRequestCreator", fields: [creatorPersonaId], references: [id], onDelete: Cascade)
+  creatorHost    Host?    @relation("PaymentRequestHostCreator", fields: [creatorHostId], references: [id], onDelete: Cascade)
+  targetPersona  Persona? @relation("PaymentRequestTarget", fields: [targetPersonaId], references: [id], onDelete: Cascade)
+  targetHost     Host?    @relation("PaymentRequestHostTarget", fields: [targetHostId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+  qrToken        QrToken?
+
+  @@map("payment_requests")
+}
+
+enum PaymentRequestStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+model QrToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  type      QrTokenType
+  payload   Json?
+  paymentRequestId String? @unique
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  paymentRequest PaymentRequest? @relation(fields: [paymentRequestId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("qr_tokens")
+}
+
+enum QrTokenType {
+  SIN
+  PAYMENT
+  DEVICE_BIND
+}
+
+model DeckingKnownTarget {
+  id        String   @id @default(cuid())
+  personaId String
+  targetType HackTargetType
+  targetId   String
+  createdAt DateTime @default(now())
+
+  persona   Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@unique([personaId, targetType, targetId])
+  @@map("decking_known_targets")
+}
