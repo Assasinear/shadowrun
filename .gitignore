@@ -36,7 +36,6 @@ Thumbs.db
 *~
 
 # Prisma
-apps/api/prisma/migrations/
 apps/api/*.db
 apps/api/*.db-journal
 
