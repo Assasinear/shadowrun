@@ -5,7 +5,7 @@ nixPkgs = ["nodejs_20", "pnpm"]
 cmds = ["pnpm install"]
 
 [phases.build]
-cmds = ["pnpm prisma generate", "pnpm build"]
+cmds = ["pnpm prisma generate", "pnpm run build"]
 
 [start]
-cmd = "pnpm prisma migrate deploy && pnpm start:prod"
+cmd = "pnpm prisma migrate deploy && node dist/src/main"

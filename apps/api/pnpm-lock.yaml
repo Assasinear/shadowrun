@@ -11,6 +11,9 @@ importers:
       '@fastify/static':
         specifier: ^7.0.4
         version: 7.0.4
+      '@nestjs/cli':
+        specifier: ^10.2.1
+        version: 10.4.9
       '@nestjs/common':
         specifier: ^10.3.0
         version: 10.4.22(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -74,13 +77,13 @@ importers:
       socket.io:
         specifier: ^4.6.1
         version: 4.8.3
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
       zod:
         specifier: ^3.22.4
         version: 3.25.76
     devDependencies:
-      '@nestjs/cli':
-        specifier: ^10.2.1
-        version: 10.4.9
       '@nestjs/schematics':
         specifier: ^10.0.3
         version: 10.2.3(chokidar@3.6.0)(typescript@5.9.3)
@@ -132,9 +135,6 @@ importers:
       tsconfig-paths:
         specifier: ^4.2.0
         version: 4.2.0
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
 
 packages:
 
