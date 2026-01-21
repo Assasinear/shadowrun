@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+buildCommand = "cd apps/api && pnpm install && pnpm prisma generate && pnpm build"
+
+[deploy]
+startCommand = "cd apps/api && pnpm prisma migrate deploy && node dist/src/main"
+healthcheckPath = "/api"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
