@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo } from 'react';
 import { Typography, Spin } from 'antd';
 import {
   ReactFlow,
@@ -7,10 +7,10 @@ import {
   MiniMap,
   type Node,
   type Edge,
-  Position,
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import Dagre from '@dagrejs/dagre';
 import { useQuery } from '@tanstack/react-query';
 import { getPersonas } from '../api/personas';
 import { getHosts } from '../api/hosts';
@@ -22,6 +22,42 @@ const NODE_COLORS: Record<string, string> = {
   spider: '#ff6600',
   device: '#ffcc00',
 };
+
+const NODE_WIDTH = 160;
+const NODE_HEIGHT = 50;
+
+function layoutGraph(nodes: Node[], edges: Edge[]): Node[] {
+  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+  g.setGraph({
+    rankdir: 'TB',
+    nodesep: 60,
+    ranksep: 100,
+    edgesep: 30,
+    marginx: 40,
+    marginy: 40,
+  });
+
+  for (const node of nodes) {
+    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+  }
+
+  for (const edge of edges) {
+    g.setEdge(edge.source, edge.target);
+  }
+
+  Dagre.layout(g);
+
+  return nodes.map((node) => {
+    const pos = g.node(node.id);
+    return {
+      ...node,
+      position: {
+        x: pos.x - NODE_WIDTH / 2,
+        y: pos.y - NODE_HEIGHT / 2,
+      },
+    };
+  });
+}
 
 export default function GraphPage() {
   const { data: personasData, isLoading: lp } = useQuery({
@@ -44,21 +80,14 @@ export default function GraphPage() {
     const hosts = hostsData?.items ?? [];
     const devices = devicesData?.items ?? [];
 
-    const ns: Node[] = [];
+    const rawNodes: Node[] = [];
     const es: Edge[] = [];
 
-    const personaColumns = new Map<string, number>();
-    let pIdx = 0;
-
     for (const p of personas) {
-      const col = pIdx++;
-      personaColumns.set(p.id, col);
-      ns.push({
+      rawNodes.push({
         id: `p-${p.id}`,
         type: 'default',
-        position: { x: col * 220, y: 0 },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
+        position: { x: 0, y: 0 },
         data: { label: `👤 ${p.name}` },
         style: {
           background: '#1a1a1a',
@@ -68,20 +97,17 @@ export default function GraphPage() {
           fontSize: 12,
           padding: '8px 12px',
           borderRadius: 8,
-          minWidth: 120,
+          minWidth: NODE_WIDTH,
           textAlign: 'center' as const,
         },
       });
     }
 
-    let hIdx = 0;
     for (const h of hosts) {
-      ns.push({
+      rawNodes.push({
         id: `h-${h.id}`,
         type: 'default',
-        position: { x: hIdx * 220, y: 200 },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
+        position: { x: 0, y: 0 },
         data: { label: `🖥️ ${h.name}` },
         style: {
           background: '#1a1a1a',
@@ -91,7 +117,7 @@ export default function GraphPage() {
           fontSize: 12,
           padding: '8px 12px',
           borderRadius: 8,
-          minWidth: 120,
+          minWidth: NODE_WIDTH,
           textAlign: 'center' as const,
         },
       });
@@ -103,9 +129,12 @@ export default function GraphPage() {
           target: `h-${h.id}`,
           label: 'owner',
           type: 'smoothstep',
-          style: { stroke: NODE_COLORS.persona },
+          animated: false,
+          style: { stroke: NODE_COLORS.persona, strokeWidth: 2 },
           markerEnd: { type: MarkerType.ArrowClosed, color: NODE_COLORS.persona },
-          labelStyle: { fontSize: 10, fill: '#888' },
+          labelStyle: { fontSize: 10, fill: '#aaa', fontFamily: 'monospace' },
+          labelBgStyle: { fill: '#0a0a0a', fillOpacity: 0.9 },
+          labelBgPadding: [4, 2] as [number, number],
         });
       }
 
@@ -114,36 +143,36 @@ export default function GraphPage() {
           id: `e-spider-${h.id}`,
           source: `p-${h.spiderPersonaId}`,
           target: `h-${h.id}`,
-          label: 'spider',
+          label: '🕷 spider',
           type: 'smoothstep',
-          style: { stroke: NODE_COLORS.spider, strokeDasharray: '5,5' },
+          animated: true,
+          style: { stroke: NODE_COLORS.spider, strokeWidth: 2, strokeDasharray: '8,4' },
           markerEnd: { type: MarkerType.ArrowClosed, color: NODE_COLORS.spider },
-          labelStyle: { fontSize: 10, fill: '#ff6600' },
+          labelStyle: { fontSize: 10, fill: NODE_COLORS.spider, fontFamily: 'monospace' },
+          labelBgStyle: { fill: '#0a0a0a', fillOpacity: 0.9 },
+          labelBgPadding: [4, 2] as [number, number],
         });
       }
-
-      hIdx++;
     }
 
-    let dIdx = 0;
     for (const d of devices) {
-      ns.push({
+      const borderColor = d.status === 'BRICKED' ? '#ff4d4f' : NODE_COLORS.device;
+      rawNodes.push({
         id: `d-${d.id}`,
         type: 'default',
-        position: { x: dIdx * 180, y: 420 },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-        data: { label: `📱 ${d.name ?? d.code} (${d.type})` },
+        position: { x: 0, y: 0 },
+        data: { label: `📱 ${d.name ?? d.code}\n(${d.type})` },
         style: {
           background: '#1a1a1a',
-          border: `2px solid ${d.status === 'BRICKED' ? '#ff4d4f' : NODE_COLORS.device}`,
-          color: d.status === 'BRICKED' ? '#ff4d4f' : NODE_COLORS.device,
+          border: `2px solid ${borderColor}`,
+          color: borderColor,
           fontFamily: 'monospace',
           fontSize: 11,
           padding: '6px 10px',
           borderRadius: 6,
-          minWidth: 100,
+          minWidth: 120,
           textAlign: 'center' as const,
+          whiteSpace: 'pre-line' as const,
         },
       });
 
@@ -154,16 +183,17 @@ export default function GraphPage() {
           target: `d-${d.id}`,
           label: 'device',
           type: 'smoothstep',
-          style: { stroke: NODE_COLORS.device },
+          style: { stroke: NODE_COLORS.device, strokeWidth: 2 },
           markerEnd: { type: MarkerType.ArrowClosed, color: NODE_COLORS.device },
-          labelStyle: { fontSize: 10, fill: '#888' },
+          labelStyle: { fontSize: 10, fill: '#aaa', fontFamily: 'monospace' },
+          labelBgStyle: { fill: '#0a0a0a', fillOpacity: 0.9 },
+          labelBgPadding: [4, 2] as [number, number],
         });
       }
-
-      dIdx++;
     }
 
-    return { nodes: ns, edges: es };
+    const layoutedNodes = layoutGraph(rawNodes, es);
+    return { nodes: layoutedNodes, edges: es };
   }, [personasData, hostsData, devicesData]);
 
   const loading = lp || lh || ld;
@@ -174,12 +204,22 @@ export default function GraphPage() {
         ГРАФ СВЯЗЕЙ
       </Typography.Title>
 
-      <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-        {Object.entries({ persona: '👤 Персона', host: '🖥️ Хост', spider: '🕷️ Spider', device: '📱 Устройство' }).map(([key, label]) => (
-          <span key={key} style={{ color: NODE_COLORS[key], fontFamily: 'monospace', fontSize: 13 }}>
-            ● {label}
-          </span>
-        ))}
+      <div style={{ display: 'flex', gap: 24, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ color: NODE_COLORS.persona, fontFamily: 'monospace', fontSize: 13 }}>
+          ● Персона
+        </span>
+        <span style={{ color: NODE_COLORS.host, fontFamily: 'monospace', fontSize: 13 }}>
+          ● Хост
+        </span>
+        <span style={{ color: NODE_COLORS.spider, fontFamily: 'monospace', fontSize: 13 }}>
+          - - Spider
+        </span>
+        <span style={{ color: NODE_COLORS.device, fontFamily: 'monospace', fontSize: 13 }}>
+          ● Устройство
+        </span>
+        <span style={{ color: '#ff4d4f', fontFamily: 'monospace', fontSize: 13 }}>
+          ● Bricked
+        </span>
       </div>
 
       {loading ? (
@@ -190,9 +230,11 @@ export default function GraphPage() {
             nodes={nodes}
             edges={edges}
             fitView
+            fitViewOptions={{ padding: 0.3 }}
             minZoom={0.1}
-            maxZoom={2}
+            maxZoom={2.5}
             proOptions={{ hideAttribution: true }}
+            defaultEdgeOptions={{ type: 'smoothstep' }}
           >
             <Background color="#1a3a1a" gap={24} />
             <Controls
