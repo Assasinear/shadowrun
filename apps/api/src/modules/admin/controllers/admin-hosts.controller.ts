@@ -33,10 +33,29 @@ export class AdminHostsController {
   constructor(private readonly service: AdminHostsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Список всех хостов' })
+  @ApiOperation({ summary: 'Список всех хостов (фильтры, пагинация)' })
   @ApiQuery({ name: 'search', required: false })
-  findAll(@Query('search') search?: string) {
-    return this.service.findAll(search);
+  @ApiQuery({ name: 'isPublic', required: false, type: Boolean })
+  @ApiQuery({ name: 'ownerPersonaId', required: false })
+  @ApiQuery({ name: 'spiderPersonaId', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  findAll(
+    @Query('search') search?: string,
+    @Query('isPublic') isPublic?: string,
+    @Query('ownerPersonaId') ownerPersonaId?: string,
+    @Query('spiderPersonaId') spiderPersonaId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.findAll({
+      search,
+      isPublic: isPublic === 'true' ? true : isPublic === 'false' ? false : undefined,
+      ownerPersonaId,
+      spiderPersonaId,
+      page: page ? +page : undefined,
+      limit: limit ? +limit : undefined,
+    });
   }
 
   @Get(':id')
@@ -79,5 +98,17 @@ export class AdminHostsController {
   @ApiOperation({ summary: 'Сгенерировать QR-код хоста' })
   generateHostQr(@Param('id') id: string) {
     return this.service.generateHostQr(id);
+  }
+
+  @Post(':id/clone')
+  @ApiOperation({ summary: 'Клонировать хост' })
+  clone(@Param('id') id: string) {
+    return this.service.clone(id);
+  }
+
+  @Post('mass/delete')
+  @ApiOperation({ summary: 'Массовое удаление хостов' })
+  massDelete(@Body() body: { ids: string[] }) {
+    return this.service.massDelete(body.ids);
   }
 }

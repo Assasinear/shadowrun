@@ -16,6 +16,14 @@ import {
   UserSwitchOutlined,
   SettingOutlined,
   LockOutlined,
+  HeatMapOutlined,
+  MessageOutlined,
+  TransactionOutlined,
+  NotificationOutlined,
+  FormOutlined,
+  DollarOutlined,
+  KeyOutlined,
+  SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../hooks/useAuth';
 
@@ -26,8 +34,23 @@ const menuItems = [
   { key: '/personas', icon: <TeamOutlined />, label: 'Персоны' },
   { key: '/hosts', icon: <CloudServerOutlined />, label: 'Хосты' },
   { key: '/devices', icon: <MobileOutlined />, label: 'Устройства' },
-  { key: '/economy', icon: <BankOutlined />, label: 'Экономика' },
+  {
+    key: 'economy-group',
+    icon: <BankOutlined />,
+    label: 'Экономика',
+    children: [
+      { key: '/economy', label: 'Кошельки и подписки' },
+      { key: '/economy/transactions', icon: <TransactionOutlined />, label: 'Транзакции' },
+      { key: '/payment-requests', icon: <DollarOutlined />, label: 'Платёжные запросы' },
+    ],
+  },
+  { key: '/hack-sessions', icon: <HeatMapOutlined />, label: 'Хак-сессии' },
+  { key: '/messages', icon: <MessageOutlined />, label: 'Сообщения' },
+  { key: '/blog-posts', icon: <FormOutlined />, label: 'Блог-посты' },
+  { key: '/notifications', icon: <NotificationOutlined />, label: 'Уведомления' },
   { key: '/files', icon: <FileOutlined />, label: 'Файлы' },
+  { key: '/licenses', icon: <SafetyCertificateOutlined />, label: 'Лицензии' },
+  { key: '/access-tokens', icon: <KeyOutlined />, label: 'Токены доступа' },
   { key: '/logs', icon: <FileTextOutlined />, label: 'Логи' },
   { key: '/roles', icon: <UserSwitchOutlined />, label: 'Роли' },
   { key: '/settings', icon: <SettingOutlined />, label: 'Настройки' },
@@ -41,9 +64,17 @@ export default function Layout() {
   const location = useLocation();
   const { logout } = useAuth();
 
-  const selectedKey = menuItems
-    .filter((item) => item.key !== '/')
-    .find((item) => location.pathname.startsWith(item.key))?.key ?? '/';
+  const allKeys = menuItems.flatMap((item) =>
+    'children' in item && item.children ? item.children.map((c) => c.key) : [item.key],
+  );
+  const selectedKey = allKeys
+    .filter((k) => k !== '/')
+    .find((k) => location.pathname.startsWith(k)) ?? '/';
+
+  const openKeys = menuItems
+    .filter((item): item is typeof item & { children: unknown[] } => 'children' in item && !!item.children)
+    .filter((item) => item.children.some((c: { key: string }) => location.pathname.startsWith(c.key)))
+    .map((item) => item.key);
 
   return (
     <AntLayout style={{ minHeight: '100vh' }}>
@@ -52,6 +83,7 @@ export default function Layout() {
         collapsed={collapsed}
         onCollapse={setCollapsed}
         trigger={null}
+        width={220}
         style={{
           background: '#0a0a0a',
           borderRight: '1px solid #1a3a1a',
@@ -82,8 +114,13 @@ export default function Layout() {
           theme="dark"
           mode="inline"
           selectedKeys={[selectedKey]}
+          defaultOpenKeys={openKeys}
           items={menuItems}
-          onClick={({ key }) => navigate(key)}
+          onClick={({ key }) => {
+            if (!key.startsWith('economy-group')) {
+              navigate(key);
+            }
+          }}
           style={{ background: 'transparent', borderRight: 'none' }}
         />
       </Sider>
@@ -118,7 +155,7 @@ export default function Layout() {
             onClick={logout}
             style={{ color: '#ff4d4f' }}
           >
-            Logout
+            Выход
           </Button>
         </Header>
         <Content

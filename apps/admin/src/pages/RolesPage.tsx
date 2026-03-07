@@ -1,18 +1,19 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Card,
   Button,
   Space,
   Table,
+  Input,
+  Select,
   Modal,
   Form,
-  Select,
   Popconfirm,
   Typography,
   Alert,
   message,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSpecialRoles, assignRole, removeRole } from '../api/roles';
 import { getPersonas } from '../api/personas';
@@ -28,6 +29,8 @@ export default function RolesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
   const [personaSearch, setPersonaSearch] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [filterRole, setFilterRole] = useState<string | undefined>();
 
   const { data: roles, isLoading } = useQuery({
     queryKey: ['special-roles'],
@@ -43,21 +46,21 @@ export default function RolesPage() {
     mutationFn: ({ personaId, role }: { personaId: string; role: string }) =>
       assignRole(personaId, role),
     onSuccess: () => {
-      message.success('Role assigned');
+      message.success('Роль назначена');
       queryClient.invalidateQueries({ queryKey: ['special-roles'] });
       setModalOpen(false);
       form.resetFields();
     },
-    onError: () => message.error('Failed to assign role'),
+    onError: () => message.error('Ошибка назначения роли'),
   });
 
   const removeMutation = useMutation({
     mutationFn: (personaId: string) => removeRole(personaId),
     onSuccess: () => {
-      message.success('Role removed');
+      message.success('Роль снята');
       queryClient.invalidateQueries({ queryKey: ['special-roles'] });
     },
-    onError: () => message.error('Failed to remove role'),
+    onError: () => message.error('Ошибка снятия роли'),
   });
 
   const personaSelectOptions = (personaOptions?.items ?? []).map((p) => ({
@@ -67,7 +70,7 @@ export default function RolesPage() {
 
   const roleColumns = [
     {
-      title: 'Persona',
+      title: 'Персона',
       dataIndex: 'name',
       key: 'name',
       render: (name: string) => (
@@ -75,17 +78,17 @@ export default function RolesPage() {
       ),
     },
     {
-      title: 'Username',
+      title: 'Логин',
       dataIndex: 'username',
       key: 'username',
     },
     {
-      title: 'Actions',
+      title: '',
       key: 'actions',
       width: 100,
       render: (_: unknown, record: { id: string; name: string }) => (
         <Popconfirm
-          title={`Remove role from ${record.name}?`}
+          title={`Снять роль с ${record.name}?`}
           onConfirm={() => removeMutation.mutate(record.id)}
         >
           <Button type="text" icon={<DeleteOutlined />} size="small" danger />
@@ -94,8 +97,23 @@ export default function RolesPage() {
     },
   ];
 
+  const rolesToShow = useMemo(() => {
+    const list: ('DECKER' | 'SPIDER' | 'GRIDGOD')[] = filterRole
+      ? [filterRole as 'DECKER' | 'SPIDER' | 'GRIDGOD']
+      : ['DECKER', 'SPIDER', 'GRIDGOD'];
+    return list;
+  }, [filterRole]);
+
+  function filterItems(items: { id: string; name: string; username: string }[]) {
+    if (!searchText) return items;
+    const lower = searchText.toLowerCase();
+    return items.filter(
+      (i) => i.name.toLowerCase().includes(lower) || i.username.toLowerCase().includes(lower),
+    );
+  }
+
   function renderRoleCard(roleName: 'DECKER' | 'SPIDER' | 'GRIDGOD', color: string) {
-    const items = roles?.[roleName] ?? [];
+    const items = filterItems(roles?.[roleName] ?? []);
     return (
       <Card
         title={
@@ -131,27 +149,46 @@ export default function RolesPage() {
     );
   }
 
+  const colorMap: Record<string, string> = { DECKER: '#00bfff', SPIDER: '#ff6600', GRIDGOD: '#00ff41' };
+
   return (
     <div>
       <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 24 }}>
         <Typography.Title level={3} style={{ color: '#00ff41', fontFamily: 'monospace', margin: 0 }}>
-          ROLES
+          РОЛИ
         </Typography.Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-          Assign Role
+          Назначить роль
         </Button>
+      </Space>
+
+      <Space style={{ marginBottom: 16 }} wrap>
+        <Input
+          placeholder="Поиск по имени/логину..."
+          prefix={<SearchOutlined />}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          style={{ width: 260 }}
+          allowClear
+        />
+        <Select
+          allowClear
+          placeholder="Фильтр по роли"
+          value={filterRole}
+          onChange={setFilterRole}
+          style={{ width: 160 }}
+          options={ROLE_OPTIONS}
+        />
       </Space>
 
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          {renderRoleCard('DECKER', '#00bfff')}
-          {renderRoleCard('SPIDER', '#ff6600')}
-          {renderRoleCard('GRIDGOD', '#00ff41')}
+          {rolesToShow.map((r) => renderRoleCard(r, colorMap[r]))}
         </div>
       </Space>
 
       <Modal
-        title="Assign Role"
+        title="Назначить роль"
         open={modalOpen}
         onCancel={() => {
           setModalOpen(false);
@@ -165,17 +202,17 @@ export default function RolesPage() {
           layout="vertical"
           onFinish={(values) => assignMutation.mutate(values)}
         >
-          <Form.Item name="personaId" label="Persona" rules={[{ required: true }]}>
+          <Form.Item name="personaId" label="Персона" rules={[{ required: true }]}>
             <Select
               showSearch
-              placeholder="Search persona..."
+              placeholder="Поиск персоны..."
               filterOption={false}
               onSearch={setPersonaSearch}
               options={personaSelectOptions}
             />
           </Form.Item>
-          <Form.Item name="role" label="Role" rules={[{ required: true }]}>
-            <Select options={ROLE_OPTIONS} placeholder="Select role" />
+          <Form.Item name="role" label="Роль" rules={[{ required: true }]}>
+            <Select options={ROLE_OPTIONS} placeholder="Выберите роль" />
           </Form.Item>
         </Form>
       </Modal>

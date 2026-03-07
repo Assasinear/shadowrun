@@ -41,13 +41,16 @@ export default function FilesPage() {
   const [search, setSearch] = useState('');
   const [filterPersonaId, setFilterPersonaId] = useState<string | undefined>();
   const [filterHostId, setFilterHostId] = useState<string | undefined>();
+  const [filterPublic, setFilterPublic] = useState<string | undefined>();
+  const [filterIce, setFilterIce] = useState<string | undefined>();
+  const [filterRedeem, setFilterRedeem] = useState<string | undefined>();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingFile, setEditingFile] = useState<FileRecord | null>(null);
   const [form] = Form.useForm();
   const [personaSearch, setPersonaSearch] = useState('');
   const [hostSearch, setHostSearch] = useState('');
 
-  const { data, isLoading } = useQuery({
+  const { data: rawData, isLoading } = useQuery({
     queryKey: ['files', search, filterPersonaId, filterHostId],
     queryFn: () =>
       getFiles({
@@ -55,6 +58,18 @@ export default function FilesPage() {
         personaId: filterPersonaId,
         hostId: filterHostId,
       }),
+  });
+
+  const data = rawData?.filter((f) => {
+    if (filterPublic === 'public' && !f.isPublic) return false;
+    if (filterPublic === 'private' && f.isPublic) return false;
+    if (filterIce === '0' && f.iceLevel !== 0) return false;
+    if (filterIce === '1+' && f.iceLevel < 1) return false;
+    if (filterIce === '3+' && f.iceLevel < 3) return false;
+    if (filterIce === '5+' && f.iceLevel < 5) return false;
+    if (filterRedeem === 'has' && !f.redeemCode) return false;
+    if (filterRedeem === 'no' && f.redeemCode) return false;
+    return true;
   });
 
   const { data: personaOptions } = useQuery({
@@ -123,7 +138,7 @@ export default function FilesPage() {
     label: p.name,
   }));
 
-  const hostSelectOptions = (hostOptions ?? []).map((h) => ({
+  const hostSelectOptions = (hostOptions?.items ?? []).map((h) => ({
     value: h.id,
     label: h.name,
   }));
@@ -199,38 +214,71 @@ export default function FilesPage() {
   return (
     <div>
       <Typography.Title level={3} style={{ color: '#00ff41', fontFamily: 'monospace' }}>
-        FILES
+        ФАЙЛЫ
       </Typography.Title>
 
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }} wrap>
         <Space wrap>
           <Input
-            placeholder="Search files..."
+            placeholder="Поиск..."
             prefix={<SearchOutlined />}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 240 }}
+            style={{ width: 200 }}
             allowClear
           />
           <Select
-            showSearch
-            allowClear
-            placeholder="Filter by persona"
+            showSearch allowClear
+            placeholder="По персоне"
             filterOption={false}
             onSearch={setPersonaSearch}
             onChange={(val) => setFilterPersonaId(val)}
             options={personaSelectOptions}
-            style={{ width: 200 }}
+            style={{ width: 180 }}
           />
           <Select
-            showSearch
-            allowClear
-            placeholder="Filter by host"
+            showSearch allowClear
+            placeholder="По хосту"
             filterOption={false}
             onSearch={setHostSearch}
             onChange={(val) => setFilterHostId(val)}
             options={hostSelectOptions}
-            style={{ width: 200 }}
+            style={{ width: 180 }}
+          />
+          <Select
+            allowClear
+            placeholder="Публичность"
+            value={filterPublic}
+            onChange={setFilterPublic}
+            style={{ width: 140 }}
+            options={[
+              { value: 'public', label: 'Публичные' },
+              { value: 'private', label: 'Приватные' },
+            ]}
+          />
+          <Select
+            allowClear
+            placeholder="ICE"
+            value={filterIce}
+            onChange={setFilterIce}
+            style={{ width: 120 }}
+            options={[
+              { value: '0', label: 'ICE = 0' },
+              { value: '1+', label: 'ICE ≥ 1' },
+              { value: '3+', label: 'ICE ≥ 3' },
+              { value: '5+', label: 'ICE ≥ 5' },
+            ]}
+          />
+          <Select
+            allowClear
+            placeholder="Redeem код"
+            value={filterRedeem}
+            onChange={setFilterRedeem}
+            style={{ width: 150 }}
+            options={[
+              { value: 'has', label: 'С кодом' },
+              { value: 'no', label: 'Без кода' },
+            ]}
           />
         </Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>

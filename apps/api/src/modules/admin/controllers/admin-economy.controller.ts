@@ -96,9 +96,32 @@ export class AdminEconomyController {
   }
 
   @Get('subscriptions')
-  @ApiOperation({ summary: 'Список всех подписок' })
-  getAllSubscriptions() {
-    return this.service.getAllSubscriptions();
+  @ApiOperation({ summary: 'Список всех подписок (фильтры)' })
+  @ApiQuery({ name: 'type', required: false })
+  @ApiQuery({ name: 'payerType', required: false })
+  @ApiQuery({ name: 'payerId', required: false })
+  @ApiQuery({ name: 'payeeType', required: false })
+  @ApiQuery({ name: 'payeeId', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  getAllSubscriptions(
+    @Query('type') type?: string,
+    @Query('payerType') payerType?: string,
+    @Query('payerId') payerId?: string,
+    @Query('payeeType') payeeType?: string,
+    @Query('payeeId') payeeId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.getAllSubscriptions({
+      type,
+      payerType,
+      payerId,
+      payeeType,
+      payeeId,
+      page: page ? +page : undefined,
+      limit: limit ? +limit : undefined,
+    });
   }
 
   @Post('subscriptions')
@@ -117,5 +140,11 @@ export class AdminEconomyController {
   @ApiOperation({ summary: 'Сгенерировать QR-код оплаты' })
   generatePaymentQr(@Body() dto: GeneratePaymentQrDto) {
     return this.service.generatePaymentQr(dto);
+  }
+
+  @Post('admin-transfer')
+  @ApiOperation({ summary: 'Административный перевод между кошельками' })
+  createAdminTransaction(@Body() body: { fromWalletId: string; toWalletId: string; amount: number; purpose?: string }) {
+    return this.service.createAdminTransaction(body);
   }
 }

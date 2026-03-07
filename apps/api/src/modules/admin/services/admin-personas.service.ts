@@ -14,16 +14,30 @@ import * as QRCode from 'qrcode';
 export class AdminPersonasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(search?: string, page = 1, limit = 50) {
+  async findAll(filters: {
+    search?: string;
+    role?: string;
+    isBlocked?: boolean;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = filters.page ?? 1;
+    const limit = filters.limit ?? 50;
     const skip = (page - 1) * limit;
 
     const where: any = {};
-    if (search) {
+    if (filters.search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { lls: { sin: { contains: search, mode: 'insensitive' } } },
-        { user: { username: { contains: search, mode: 'insensitive' } } },
+        { name: { contains: filters.search, mode: 'insensitive' } },
+        { lls: { sin: { contains: filters.search, mode: 'insensitive' } } },
+        { user: { username: { contains: filters.search, mode: 'insensitive' } } },
       ];
+    }
+    if (filters.role) {
+      where.user = { ...where.user, role: filters.role };
+    }
+    if (filters.isBlocked !== undefined) {
+      where.user = { ...where.user, isBlocked: filters.isBlocked };
     }
 
     const [items, total] = await Promise.all([
@@ -275,6 +289,77 @@ export class AdminPersonasService {
     });
 
     return { token: qrToken.token, qrDataUrl, sin: persona.lls.sin };
+  }
+
+  async resetPassword(personaId: string, newPassword: string) {
+    const persona = await this.prisma.persona.findUnique({
+      where: { id: personaId },
+      select: { userId: true },
+    });
+    if (!persona) {
+      throw new NotFoundException('Persona not found');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    return this.prisma.user.update({
+      where: { id: persona.userId },
+      data: { password: hashedPassword },
+      select: { id: true, username: true },
+    });
+  }
+
+  async massBlock(personaIds: string[]) {
+    const personas = await this.prisma.persona.findMany({
+      where: { id: { in: personaIds } },
+      select: { userId: true },
+    });
+    const userIds = personas.map((p) => p.userId);
+    return this.prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: { isBlocked: true },
+    });
+  }
+
+  async massUnblock(personaIds: string[]) {
+    const personas = await this.prisma.persona.findMany({
+      where: { id: { in: personaIds } },
+      select: { userId: true },
+    });
+    const userIds = personas.map((p) => p.userId);
+    return this.prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: { isBlocked: false },
+    });
+  }
+
+  async massDelete(personaIds: string[]) {
+    const personas = await this.prisma.persona.findMany({
+      where: { id: { in: personaIds } },
+      select: { userId: true },
+    });
+    const userIds = personas.map((p) => p.userId);
+    return this.prisma.user.deleteMany({
+      where: { id: { in: userIds } },
+    });
+  }
+
+  async massSetBalance(personaIds: string[], balance: number) {
+    return this.prisma.wallet.updateMany({
+      where: { personaId: { in: personaIds } },
+      data: { balance },
+    });
+  }
+
+  async massChangeRole(personaIds: string[], role: string) {
+    const personas = await this.prisma.persona.findMany({
+      where: { id: { in: personaIds } },
+      select: { userId: true },
+    });
+    const userIds = personas.map((p) => p.userId);
+    return this.prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: { role: role as Role },
+    });
   }
 
   private generateSin(): string {

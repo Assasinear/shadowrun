@@ -13,6 +13,7 @@ import {
   Switch,
   Popconfirm,
   Typography,
+  Dropdown,
   message,
 } from 'antd';
 import {
@@ -21,9 +22,10 @@ import {
   EyeOutlined,
   DeleteOutlined,
   EditOutlined,
+  DownOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getHosts, createHost, updateHost, deleteHost } from '../api/hosts';
+import { getHosts, createHost, updateHost, deleteHost, massDeleteHosts } from '../api/hosts';
 import { getPersonas } from '../api/personas';
 import type { Host } from '../types';
 import type { ColumnsType } from 'antd/es/table';
@@ -32,16 +34,29 @@ import dayjs from 'dayjs';
 export default function HostsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [filterPublic, setFilterPublic] = useState<boolean | undefined>();
+  const [filterOwner, setFilterOwner] = useState<string | undefined>();
+  const [filterSpider, setFilterSpider] = useState<string | undefined>();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingHost, setEditingHost] = useState<Host | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [form] = Form.useForm();
   const [personaSearch, setPersonaSearch] = useState('');
 
+  const inv = () => queryClient.invalidateQueries({ queryKey: ['hosts'] });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['hosts', search, page, pageSize],
-    queryFn: () => getHosts({ search: search || undefined }),
+    queryKey: ['hosts', search, filterPublic, filterOwner, filterSpider, page, pageSize],
+    queryFn: () => getHosts({
+      search: search || undefined,
+      isPublic: filterPublic,
+      ownerPersonaId: filterOwner,
+      spiderPersonaId: filterSpider,
+      page,
+      limit: pageSize,
+    }),
   });
 
   const { data: personaOptions } = useQuery({
@@ -51,32 +66,25 @@ export default function HostsPage() {
 
   const createMutation = useMutation({
     mutationFn: (values: Record<string, unknown>) => createHost(values),
-    onSuccess: () => {
-      message.success('Host created');
-      queryClient.invalidateQueries({ queryKey: ['hosts'] });
-      closeModal();
-    },
-    onError: () => message.error('Failed to create host'),
+    onSuccess: () => { message.success('Хост создан'); inv(); closeModal(); },
+    onError: () => message.error('Ошибка создания'),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: Record<string, unknown> }) =>
-      updateHost(id, values),
-    onSuccess: () => {
-      message.success('Host updated');
-      queryClient.invalidateQueries({ queryKey: ['hosts'] });
-      closeModal();
-    },
-    onError: () => message.error('Failed to update host'),
+    mutationFn: ({ id, values }: { id: string; values: Record<string, unknown> }) => updateHost(id, values),
+    onSuccess: () => { message.success('Хост обновлён'); inv(); closeModal(); },
+    onError: () => message.error('Ошибка обновления'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteHost,
-    onSuccess: () => {
-      message.success('Host deleted');
-      queryClient.invalidateQueries({ queryKey: ['hosts'] });
-    },
-    onError: () => message.error('Failed to delete host'),
+    onSuccess: () => { message.success('Хост удалён'); inv(); },
+    onError: () => message.error('Ошибка удаления'),
+  });
+
+  const massDeleteMutation = useMutation({
+    mutationFn: () => massDeleteHosts(selectedIds),
+    onSuccess: () => { message.success('Массовое удаление выполнено'); inv(); setSelectedIds([]); },
   });
 
   function closeModal() {
@@ -105,23 +113,19 @@ export default function HostsPage() {
 
   const columns: ColumnsType<Host> = [
     {
-      title: 'Name',
+      title: 'Название',
       dataIndex: 'name',
       key: 'name',
       render: (name: string, record) => (
-        <Link to={`/hosts/${record.id}`} style={{ color: '#00ff41' }}>
-          {name}
-        </Link>
+        <Link to={`/hosts/${record.id}`} style={{ color: '#00ff41' }}>{name}</Link>
       ),
     },
     {
-      title: 'Owner',
+      title: 'Владелец',
       key: 'owner',
       render: (_, record) =>
         record.owner ? (
-          <Link to={`/personas/${record.owner.id}`} style={{ color: '#00ff41' }}>
-            {record.owner.name}
-          </Link>
+          <Link to={`/personas/${record.owner.id}`} style={{ color: '#00ff41' }}>{record.owner.name}</Link>
         ) : '—',
     },
     {
@@ -129,56 +133,39 @@ export default function HostsPage() {
       key: 'spider',
       render: (_, record) =>
         record.spider ? (
-          <Link to={`/personas/${record.spider.id}`} style={{ color: '#00ff41' }}>
-            {record.spider.name}
-          </Link>
+          <Link to={`/personas/${record.spider.id}`} style={{ color: '#00ff41' }}>{record.spider.name}</Link>
         ) : '—',
     },
+    { title: 'ICE', dataIndex: 'iceLevel', key: 'iceLevel', width: 60 },
     {
-      title: 'ICE',
-      dataIndex: 'iceLevel',
-      key: 'iceLevel',
-      width: 80,
-    },
-    {
-      title: 'Public',
+      title: 'Публичный',
       dataIndex: 'isPublic',
       key: 'isPublic',
-      width: 80,
-      render: (v: boolean) =>
-        v ? <Tag color="green">Yes</Tag> : <Tag color="default">No</Tag>,
+      width: 100,
+      render: (v: boolean) => v ? <Tag color="green">Да</Tag> : <Tag color="default">Нет</Tag>,
     },
     {
-      title: 'Files',
+      title: 'Файлов',
       key: 'files',
       width: 80,
-      render: (_, record) => record.files?.length ?? 0,
+      render: (_, record) => record._count?.files ?? record.files?.length ?? 0,
     },
     {
-      title: 'Created',
+      title: 'Создан',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      width: 120,
       render: (d: string) => dayjs(d).format('DD.MM.YY HH:mm'),
     },
     {
-      title: 'Actions',
+      title: 'Действия',
       key: 'actions',
       width: 150,
       render: (_, record) => (
         <Space size="small">
-          <Link to={`/hosts/${record.id}`}>
-            <Button type="text" icon={<EyeOutlined />} size="small" />
-          </Link>
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            size="small"
-            onClick={() => openEdit(record)}
-          />
-          <Popconfirm
-            title="Delete this host?"
-            onConfirm={() => deleteMutation.mutate(record.id)}
-          >
+          <Link to={`/hosts/${record.id}`}><Button type="text" icon={<EyeOutlined />} size="small" /></Link>
+          <Button type="text" icon={<EditOutlined />} size="small" onClick={() => openEdit(record)} />
+          <Popconfirm title="Удалить хост?" onConfirm={() => deleteMutation.mutate(record.id)}>
             <Button type="text" icon={<DeleteOutlined />} size="small" danger />
           </Popconfirm>
         </Space>
@@ -186,52 +173,89 @@ export default function HostsPage() {
     },
   ];
 
+  const massMenuItems = [
+    { key: 'delete', label: 'Удалить', danger: true, onClick: () => { Modal.confirm({ title: `Удалить ${selectedIds.length} хостов?`, onOk: () => massDeleteMutation.mutate() }); } },
+  ];
+
   return (
     <div>
       <Typography.Title level={3} style={{ color: '#00ff41', fontFamily: 'monospace' }}>
-        HOSTS
+        ХОСТЫ
       </Typography.Title>
 
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }} wrap>
-        <Input
-          placeholder="Search hosts..."
-          prefix={<SearchOutlined />}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          style={{ width: 300 }}
-          allowClear
-        />
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setModalOpen(true)}
-        >
-          Create Host
-        </Button>
+        <Space wrap>
+          <Input
+            placeholder="Поиск..."
+            prefix={<SearchOutlined />}
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            style={{ width: 250 }}
+            allowClear
+          />
+          <Select
+            allowClear
+            placeholder="Публичность"
+            value={filterPublic === true ? 'public' : filterPublic === false ? 'private' : undefined}
+            onChange={(v) => { setFilterPublic(v === 'public' ? true : v === 'private' ? false : undefined); setPage(1); }}
+            style={{ width: 150 }}
+            options={[
+              { value: 'public', label: 'Публичные' },
+              { value: 'private', label: 'Приватные' },
+            ]}
+          />
+          <Select
+            showSearch allowClear
+            placeholder="Владелец"
+            filterOption={false}
+            onSearch={setPersonaSearch}
+            onChange={(v) => { setFilterOwner(v); setPage(1); }}
+            options={personaSelectOptions}
+            style={{ width: 180 }}
+          />
+          <Select
+            showSearch allowClear
+            placeholder="Spider"
+            filterOption={false}
+            onSearch={setPersonaSearch}
+            onChange={(v) => { setFilterSpider(v); setPage(1); }}
+            options={personaSelectOptions}
+            style={{ width: 180 }}
+          />
+        </Space>
+        <Space>
+          {selectedIds.length > 0 && (
+            <Dropdown menu={{ items: massMenuItems }}>
+              <Button>Массовые ({selectedIds.length}) <DownOutlined /></Button>
+            </Dropdown>
+          )}
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+            Создать
+          </Button>
+        </Space>
       </Space>
 
       <Table
         columns={columns}
-        dataSource={data}
+        dataSource={data?.items}
         rowKey="id"
         loading={isLoading}
+        rowSelection={{
+          selectedRowKeys: selectedIds,
+          onChange: (keys) => setSelectedIds(keys as string[]),
+        }}
         pagination={{
           current: page,
           pageSize,
+          total: data?.total,
           showSizeChanger: true,
-          showTotal: (total) => `Total: ${total}`,
-          onChange: (p, ps) => {
-            setPage(p);
-            setPageSize(ps);
-          },
+          showTotal: (total) => `Всего: ${total}`,
+          onChange: (p, ps) => { setPage(p); setPageSize(ps); },
         }}
       />
 
       <Modal
-        title={editingHost ? 'Edit Host' : 'Create Host'}
+        title={editingHost ? 'Редактировать хост' : 'Создать хост'}
         open={modalOpen}
         onCancel={closeModal}
         onOk={() => form.submit()}
@@ -249,34 +273,14 @@ export default function HostsPage() {
             }
           }}
         >
-          <Form.Item name="name" label="Name" rules={[{ required: true }]}>
-            <Input />
+          <Form.Item name="name" label="Название" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="description" label="Описание"><Input.TextArea rows={3} /></Form.Item>
+          <Form.Item name="isPublic" label="Публичный" valuePropName="checked"><Switch /></Form.Item>
+          <Form.Item name="ownerPersonaId" label="Владелец">
+            <Select showSearch allowClear placeholder="Поиск..." filterOption={false} onSearch={setPersonaSearch} options={personaSelectOptions} />
           </Form.Item>
-          <Form.Item name="description" label="Description">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item name="isPublic" label="Public" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="ownerPersonaId" label="Owner Persona">
-            <Select
-              showSearch
-              allowClear
-              placeholder="Search persona..."
-              filterOption={false}
-              onSearch={setPersonaSearch}
-              options={personaSelectOptions}
-            />
-          </Form.Item>
-          <Form.Item name="spiderPersonaId" label="Spider Persona">
-            <Select
-              showSearch
-              allowClear
-              placeholder="Search persona..."
-              filterOption={false}
-              onSearch={setPersonaSearch}
-              options={personaSelectOptions}
-            />
+          <Form.Item name="spiderPersonaId" label="Spider">
+            <Select showSearch allowClear placeholder="Поиск..." filterOption={false} onSearch={setPersonaSearch} options={personaSelectOptions} />
           </Form.Item>
           <Form.Item name="iceLevel" label="ICE Level" initialValue={0}>
             <InputNumber min={0} style={{ width: '100%' }} />

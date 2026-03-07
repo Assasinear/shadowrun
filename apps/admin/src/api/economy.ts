@@ -3,6 +3,7 @@ import type { PaginatedResponse, Wallet, Transaction, Subscription } from '../ty
 
 export interface GetWalletsParams {
   search?: string;
+  ownerType?: string;
 }
 
 export async function getWallets(params: GetWalletsParams = {}): Promise<Wallet[]> {
@@ -21,6 +22,7 @@ export async function deposit(walletId: string, amount: number): Promise<void> {
 export interface GetTransactionsParams {
   walletId?: string;
   type?: string;
+  status?: string;
   dateFrom?: string;
   dateTo?: string;
   page?: number;
@@ -40,8 +42,18 @@ export async function exportTransactionsCsv(params: GetTransactionsParams = {}):
   return data;
 }
 
-export async function getSubscriptions(): Promise<Subscription[]> {
-  const { data } = await client.get('/admin/economy/subscriptions');
+export interface GetSubscriptionsParams {
+  type?: string;
+  payerType?: string;
+  payerId?: string;
+  payeeType?: string;
+  payeeId?: string;
+  page?: number;
+  limit?: number;
+}
+
+export async function getSubscriptions(params: GetSubscriptionsParams = {}): Promise<PaginatedResponse<Subscription>> {
+  const { data } = await client.get('/admin/economy/subscriptions', { params });
   return data;
 }
 
@@ -56,4 +68,8 @@ export async function deleteSubscription(id: string): Promise<void> {
 export async function generatePaymentQr(body: Record<string, unknown>): Promise<{ qrDataUrl: string }> {
   const { data } = await client.post('/admin/economy/qr/payment', body);
   return data;
+}
+
+export async function createAdminTransfer(body: { fromWalletId: string; toWalletId: string; amount: number; purpose?: string }): Promise<void> {
+  await client.post('/admin/economy/admin-transfer', body);
 }

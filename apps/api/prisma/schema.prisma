@@ -88,7 +88,7 @@ model Lls {
 model Device {
   id              String    @id @default(cuid())
   code            String    @unique // код для привязки
-  type            DeviceType
+  type            String    @default("COMMLINK")
   name            String?
   ownerPersonaId  String?
   status          DeviceStatus @default(ACTIVE)
@@ -99,12 +99,6 @@ model Device {
   owner           Persona?  @relation(fields: [ownerPersonaId], references: [id], onDelete: SetNull)
 
   @@map("devices")
-}
-
-enum DeviceType {
-  COMMLINK
-  DECK
-  OTHER
 }
 
 enum DeviceStatus {

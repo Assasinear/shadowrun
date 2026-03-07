@@ -13,22 +13,49 @@ import * as QRCode from 'qrcode';
 export class AdminHostsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(search?: string) {
+  async findAll(filters: {
+    search?: string;
+    isPublic?: boolean;
+    ownerPersonaId?: string;
+    spiderPersonaId?: string;
+    page?: number;
+    limit?: number;
+  } = {}) {
+    const page = filters.page ?? 1;
+    const limit = filters.limit ?? 50;
+    const skip = (page - 1) * limit;
+
     const where: any = {};
-    if (search) {
-      where.name = { contains: search, mode: 'insensitive' };
+    if (filters.search) {
+      where.name = { contains: filters.search, mode: 'insensitive' };
+    }
+    if (filters.isPublic !== undefined) {
+      where.isPublic = filters.isPublic;
+    }
+    if (filters.ownerPersonaId) {
+      where.ownerPersonaId = filters.ownerPersonaId;
+    }
+    if (filters.spiderPersonaId) {
+      where.spiderPersonaId = filters.spiderPersonaId;
     }
 
-    return this.prisma.host.findMany({
-      where,
-      include: {
-        owner: { select: { id: true, name: true } },
-        spider: { select: { id: true, name: true } },
-        wallet: true,
-        _count: { select: { files: true, accessTokens: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [items, total] = await Promise.all([
+      this.prisma.host.findMany({
+        where,
+        include: {
+          owner: { select: { id: true, name: true } },
+          spider: { select: { id: true, name: true } },
+          wallet: true,
+          _count: { select: { files: true, accessTokens: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.host.count({ where }),
+    ]);
+
+    return { items, total, page, limit };
   }
 
   async findOne(hostId: string) {
@@ -140,6 +167,54 @@ export class AdminHostsService {
         hostId,
         purpose: dto.purpose,
       },
+    });
+  }
+
+  async clone(hostId: string) {
+    const source = await this.prisma.host.findUnique({
+      where: { id: hostId },
+      include: { files: true },
+    });
+    if (!source) {
+      throw new NotFoundException('Host not found');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const newHost = await tx.host.create({
+        data: {
+          name: `${source.name} (копия)`,
+          description: source.description,
+          isPublic: source.isPublic,
+          ownerPersonaId: source.ownerPersonaId,
+          spiderPersonaId: source.spiderPersonaId,
+          iceLevel: source.iceLevel,
+        },
+      });
+
+      await tx.wallet.create({
+        data: { hostId: newHost.id, balance: 0 },
+      });
+
+      if (source.files.length > 0) {
+        await tx.file.createMany({
+          data: source.files.map((f) => ({
+            hostId: newHost.id,
+            name: f.name,
+            type: f.type,
+            content: f.content,
+            isPublic: f.isPublic,
+            iceLevel: f.iceLevel,
+          })),
+        });
+      }
+
+      return newHost;
+    });
+  }
+
+  async massDelete(ids: string[]) {
+    return this.prisma.host.deleteMany({
+      where: { id: { in: ids } },
     });
   }
 

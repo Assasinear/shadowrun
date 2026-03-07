@@ -3,6 +3,8 @@ import type { PaginatedResponse, Persona } from '../types';
 
 export interface GetPersonasParams {
   search?: string;
+  role?: string;
+  isBlocked?: boolean;
   page?: number;
   limit?: number;
 }
@@ -54,4 +56,28 @@ export async function changeRole(id: string, role: string): Promise<void> {
 export async function getSinQr(id: string): Promise<{ qrDataUrl: string }> {
   const { data } = await client.get(`/admin/personas/${id}/qr-sin`);
   return data;
+}
+
+export async function massBlockPersonas(ids: string[]): Promise<void> {
+  await client.post('/admin/personas/mass/block', { ids });
+}
+
+export async function massUnblockPersonas(ids: string[]): Promise<void> {
+  await client.post('/admin/personas/mass/unblock', { ids });
+}
+
+export async function massDeletePersonas(ids: string[]): Promise<void> {
+  await client.post('/admin/personas/mass/delete', { ids });
+}
+
+export async function massSetBalance(ids: string[], balance: number): Promise<void> {
+  await client.post('/admin/personas/mass/set-balance', { ids, balance });
+}
+
+export async function massChangeRole(ids: string[], role: string): Promise<void> {
+  await client.post('/admin/personas/mass/change-role', { ids, role });
+}
+
+export async function resetPassword(personaId: string, password: string): Promise<void> {
+  await client.post(`/admin/personas/${personaId}/reset-password`, { password });
 }

@@ -25,6 +25,7 @@ export default function TransactionsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [type, setType] = useState<string | undefined>();
+  const [status, setStatus] = useState<string | undefined>();
   const [walletId, setWalletId] = useState('');
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
 
@@ -32,6 +33,7 @@ export default function TransactionsPage() {
     page,
     limit: pageSize,
     type: type || undefined,
+    status: status || undefined,
     walletId: walletId || undefined,
     dateFrom: dateRange?.[0]?.toISOString(),
     dateTo: dateRange?.[1]?.toISOString(),
@@ -129,18 +131,18 @@ export default function TransactionsPage() {
     <div>
       <Space style={{ marginBottom: 16 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/economy')}>
-          Back
+          Назад
         </Button>
         <Typography.Title level={3} style={{ color: '#00ff41', fontFamily: 'monospace', margin: 0 }}>
-          TRANSACTIONS
+          ТРАНЗАКЦИИ
         </Typography.Title>
       </Space>
 
       <Space style={{ marginBottom: 16 }} wrap>
         <Select
-          placeholder="Type"
+          placeholder="Тип"
           allowClear
-          style={{ width: 200 }}
+          style={{ width: 180 }}
           value={type}
           onChange={setType}
           options={[
@@ -148,6 +150,19 @@ export default function TransactionsPage() {
             { value: 'SUBSCRIPTION', label: 'SUBSCRIPTION' },
             { value: 'SALARY', label: 'SALARY' },
             { value: 'PAYMENT_REQUEST', label: 'PAYMENT_REQUEST' },
+          ]}
+        />
+        <Select
+          placeholder="Статус"
+          allowClear
+          style={{ width: 150 }}
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: 'COMPLETED', label: 'COMPLETED' },
+            { value: 'PENDING', label: 'PENDING' },
+            { value: 'FAILED', label: 'FAILED' },
+            { value: 'CANCELLED', label: 'CANCELLED' },
           ]}
         />
         <Input
@@ -163,7 +178,7 @@ export default function TransactionsPage() {
           }
         />
         <Button icon={<DownloadOutlined />} onClick={handleExport}>
-          Export CSV
+          CSV
         </Button>
       </Space>
 

@@ -16,15 +16,18 @@ import {
   InputNumber,
   Switch,
   Image,
+  Select,
   message,
 } from 'antd';
 import {
   ArrowLeftOutlined,
   QrcodeOutlined,
   PlusOutlined,
+  CopyOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getHost, addHostFile, createAccessToken, getHostQr } from '../api/hosts';
+import { getHost, addHostFile, createAccessToken, getHostQr, cloneHost } from '../api/hosts';
+import { getPersonas } from '../api/personas';
 import { setBalance } from '../api/economy';
 import dayjs from 'dayjs';
 import type { FileRecord, AccessToken } from '../types';
@@ -41,6 +44,17 @@ export default function HostDetailPage() {
   const [fileForm] = Form.useForm();
   const [tokenForm] = Form.useForm();
   const [balanceForm] = Form.useForm();
+  const [tokenPersonaSearch, setTokenPersonaSearch] = useState('');
+
+  const { data: tokenPersonaOptions } = useQuery({
+    queryKey: ['personas-select', tokenPersonaSearch],
+    queryFn: () => getPersonas({ search: tokenPersonaSearch || undefined, limit: 20 }),
+  });
+
+  const tokenPersonaSelectOptions = (tokenPersonaOptions?.items ?? []).map((p) => ({
+    value: p.id,
+    label: p.name,
+  }));
 
   const { data: host, isLoading, error } = useQuery({
     queryKey: ['host', id],
@@ -80,6 +94,15 @@ export default function HostDetailPage() {
     onError: () => message.error('Failed to update balance'),
   });
 
+  const cloneMutation = useMutation({
+    mutationFn: () => cloneHost(id!),
+    onSuccess: (newHost) => {
+      message.success('Хост клонирован');
+      navigate(`/hosts/${newHost.id}`);
+    },
+    onError: () => message.error('Ошибка клонирования'),
+  });
+
   const handleGenerateQr = async () => {
     try {
       const result = await getHostQr(id!);
@@ -103,7 +126,10 @@ export default function HostDetailPage() {
           {host.name}
         </Typography.Title>
         <Button icon={<QrcodeOutlined />} onClick={handleGenerateQr}>
-          Generate QR
+          QR
+        </Button>
+        <Button icon={<CopyOutlined />} onClick={() => cloneMutation.mutate()} loading={cloneMutation.isPending}>
+          Клонировать
         </Button>
       </Space>
 
@@ -289,7 +315,7 @@ export default function HostDetailPage() {
       </Modal>
 
       <Modal
-        title="Create Access Token"
+        title="Создать токен доступа"
         open={tokenModalOpen}
         onCancel={() => setTokenModalOpen(false)}
         onOk={() => tokenForm.submit()}
@@ -300,10 +326,16 @@ export default function HostDetailPage() {
           layout="vertical"
           onFinish={(values) => createTokenMutation.mutate(values)}
         >
-          <Form.Item name="personaId" label="Persona ID" rules={[{ required: true }]}>
-            <Input />
+          <Form.Item name="personaId" label="Персона" rules={[{ required: true }]}>
+            <Select
+              showSearch
+              placeholder="Поиск персоны..."
+              filterOption={false}
+              onSearch={setTokenPersonaSearch}
+              options={tokenPersonaSelectOptions}
+            />
           </Form.Item>
-          <Form.Item name="purpose" label="Purpose">
+          <Form.Item name="purpose" label="Назначение">
             <Input />
           </Form.Item>
         </Form>

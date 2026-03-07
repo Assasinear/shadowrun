@@ -12,6 +12,13 @@ import HostDetailPage from './pages/HostDetailPage';
 import DevicesPage from './pages/DevicesPage';
 import EconomyPage from './pages/EconomyPage';
 import TransactionsPage from './pages/TransactionsPage';
+import HackSessionsPage from './pages/HackSessionsPage';
+import MessagesPage from './pages/MessagesPage';
+import BlogPostsPage from './pages/BlogPostsPage';
+import NotificationsPage from './pages/NotificationsPage';
+import PaymentRequestsPage from './pages/PaymentRequestsPage';
+import AccessTokensPage from './pages/AccessTokensPage';
+import LicensesPage from './pages/LicensesPage';
 import LogsPage from './pages/LogsPage';
 import EmergencyPage from './pages/EmergencyPage';
 import FilesPage from './pages/FilesPage';
@@ -65,6 +72,13 @@ export default function App() {
                 <Route path="/devices" element={<DevicesPage />} />
                 <Route path="/economy" element={<EconomyPage />} />
                 <Route path="/economy/transactions" element={<TransactionsPage />} />
+                <Route path="/hack-sessions" element={<HackSessionsPage />} />
+                <Route path="/messages" element={<MessagesPage />} />
+                <Route path="/blog-posts" element={<BlogPostsPage />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/payment-requests" element={<PaymentRequestsPage />} />
+                <Route path="/access-tokens" element={<AccessTokensPage />} />
+                <Route path="/licenses" element={<LicensesPage />} />
                 <Route path="/logs" element={<LogsPage />} />
                 <Route path="/emergency" element={<EmergencyPage />} />
                 <Route path="/files" element={<FilesPage />} />

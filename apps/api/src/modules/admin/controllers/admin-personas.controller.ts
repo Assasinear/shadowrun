@@ -34,16 +34,26 @@ export class AdminPersonasController {
   constructor(private readonly service: AdminPersonasService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Список всех персон (пагинация, поиск)' })
+  @ApiOperation({ summary: 'Список всех персон (пагинация, поиск, фильтры)' })
   @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'role', required: false })
+  @ApiQuery({ name: 'isBlocked', required: false, type: Boolean })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   findAll(
     @Query('search') search?: string,
+    @Query('role') role?: string,
+    @Query('isBlocked') isBlocked?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.service.findAll(search, page ? +page : 1, limit ? +limit : 50);
+    return this.service.findAll({
+      search,
+      role,
+      isBlocked: isBlocked === 'true' ? true : isBlocked === 'false' ? false : undefined,
+      page: page ? +page : 1,
+      limit: limit ? +limit : 50,
+    });
   }
 
   @Get(':id')
@@ -108,5 +118,41 @@ export class AdminPersonasController {
   @ApiOperation({ summary: 'Сгенерировать QR-код SIN для персоны' })
   generateSinQr(@Param('id') id: string) {
     return this.service.generateSinQr(id);
+  }
+
+  @Post(':id/reset-password')
+  @ApiOperation({ summary: 'Сбросить пароль пользователя' })
+  resetPassword(@Param('id') id: string, @Body() body: { password: string }) {
+    return this.service.resetPassword(id, body.password);
+  }
+
+  @Post('mass/block')
+  @ApiOperation({ summary: 'Массовая блокировка' })
+  massBlock(@Body() body: { ids: string[] }) {
+    return this.service.massBlock(body.ids);
+  }
+
+  @Post('mass/unblock')
+  @ApiOperation({ summary: 'Массовая разблокировка' })
+  massUnblock(@Body() body: { ids: string[] }) {
+    return this.service.massUnblock(body.ids);
+  }
+
+  @Post('mass/delete')
+  @ApiOperation({ summary: 'Массовое удаление' })
+  massDelete(@Body() body: { ids: string[] }) {
+    return this.service.massDelete(body.ids);
+  }
+
+  @Post('mass/set-balance')
+  @ApiOperation({ summary: 'Массовая установка баланса' })
+  massSetBalance(@Body() body: { ids: string[]; balance: number }) {
+    return this.service.massSetBalance(body.ids, body.balance);
+  }
+
+  @Post('mass/change-role')
+  @ApiOperation({ summary: 'Массовая смена роли' })
+  massChangeRole(@Body() body: { ids: string[]; role: string }) {
+    return this.service.massChangeRole(body.ids, body.role);
   }
 }

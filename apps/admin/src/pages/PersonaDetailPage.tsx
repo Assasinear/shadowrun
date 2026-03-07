@@ -25,6 +25,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   PlusOutlined,
+  KeyOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -34,6 +35,7 @@ import {
   getSinQr,
   issueLicenses,
   removeLicense,
+  resetPassword,
 } from '../api/personas';
 import { setBalance } from '../api/economy';
 import dayjs from 'dayjs';
@@ -48,9 +50,13 @@ export default function PersonaDetailPage() {
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [roleModalOpen, setRoleModalOpen] = useState(false);
   const [licenseModalOpen, setLicenseModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [balanceForm] = Form.useForm();
   const [roleForm] = Form.useForm();
   const [licenseForm] = Form.useForm();
+  const [editForm] = Form.useForm();
+  const [passwordForm] = Form.useForm();
 
   const { data: persona, isLoading, error } = useQuery({
     queryKey: ['persona', id],
@@ -107,6 +113,16 @@ export default function PersonaDetailPage() {
     onError: () => message.error('Failed to remove license'),
   });
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: (password: string) => resetPassword(id!, password),
+    onSuccess: () => {
+      message.success('Пароль сброшен');
+      setPasswordModalOpen(false);
+      passwordForm.resetFields();
+    },
+    onError: () => message.error('Ошибка сброса пароля'),
+  });
+
   const handleGenerateQr = async () => {
     try {
       const result = await getSinQr(id!);
@@ -140,39 +156,18 @@ export default function PersonaDetailPage() {
               size="small"
               icon={<EditOutlined />}
               onClick={() => {
-                const values = {
+                editForm.setFieldsValue({
                   name: persona.name,
                   avatar: persona.avatar,
                   address: persona.address,
                   profession: persona.profession,
                   extraInfo: persona.extraInfo,
                   isPublic: persona.isPublic,
-                };
-                Modal.confirm({
-                  title: 'Edit Persona',
-                  width: 500,
-                  content: (
-                    <Form
-                      initialValues={values}
-                      layout="vertical"
-                      onFinish={(v) => updateMutation.mutate(v)}
-                      id="edit-persona-form"
-                    >
-                      <Form.Item name="name" label="Name"><Input /></Form.Item>
-                      <Form.Item name="avatar" label="Avatar"><Input /></Form.Item>
-                      <Form.Item name="address" label="Address"><Input /></Form.Item>
-                      <Form.Item name="profession" label="Profession"><Input /></Form.Item>
-                      <Form.Item name="extraInfo" label="Extra Info"><Input.TextArea rows={2} /></Form.Item>
-                    </Form>
-                  ),
-                  onOk: () => {
-                    document.getElementById('edit-persona-form')
-                      ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-                  },
                 });
+                setEditModalOpen(true);
               }}
             >
-              Edit
+              Редактировать
             </Button>
           }
         >
@@ -192,9 +187,14 @@ export default function PersonaDetailPage() {
           title="User Info"
           style={{ background: '#1a1a1a', border: '1px solid #1a3a1a' }}
           extra={
-            <Button size="small" onClick={() => setRoleModalOpen(true)}>
-              Change Role
-            </Button>
+            <Space size="small">
+              <Button size="small" icon={<KeyOutlined />} onClick={() => setPasswordModalOpen(true)}>
+                Сброс пароля
+              </Button>
+              <Button size="small" onClick={() => setRoleModalOpen(true)}>
+                Сменить роль
+              </Button>
+            </Space>
           }
         >
           <Descriptions column={2} size="small">
@@ -390,7 +390,7 @@ export default function PersonaDetailPage() {
       </Modal>
 
       <Modal
-        title="Issue License"
+        title="Выдать лицензию"
         open={licenseModalOpen}
         onCancel={() => setLicenseModalOpen(false)}
         onOk={() => licenseForm.submit()}
@@ -401,14 +401,56 @@ export default function PersonaDetailPage() {
           layout="vertical"
           onFinish={(values) => licenseMutation.mutate(values)}
         >
-          <Form.Item name="type" label="License Type" rules={[{ required: true }]}>
+          <Form.Item name="type" label="Тип лицензии" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="name" label="License Name" rules={[{ required: true }]}>
+          <Form.Item name="name" label="Название" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="description" label="Description">
+          <Form.Item name="description" label="Описание">
             <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Редактировать персону"
+        open={editModalOpen}
+        onCancel={() => { setEditModalOpen(false); editForm.resetFields(); }}
+        onOk={() => editForm.submit()}
+        confirmLoading={updateMutation.isPending}
+        width={500}
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+          onFinish={(v) => {
+            updateMutation.mutate(v);
+            setEditModalOpen(false);
+          }}
+        >
+          <Form.Item name="name" label="Имя"><Input /></Form.Item>
+          <Form.Item name="avatar" label="Аватар"><Input /></Form.Item>
+          <Form.Item name="address" label="Адрес"><Input /></Form.Item>
+          <Form.Item name="profession" label="Профессия"><Input /></Form.Item>
+          <Form.Item name="extraInfo" label="Доп. информация"><Input.TextArea rows={2} /></Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Сброс пароля"
+        open={passwordModalOpen}
+        onCancel={() => { setPasswordModalOpen(false); passwordForm.resetFields(); }}
+        onOk={() => passwordForm.submit()}
+        confirmLoading={resetPasswordMutation.isPending}
+      >
+        <Form
+          form={passwordForm}
+          layout="vertical"
+          onFinish={(v) => resetPasswordMutation.mutate(v.password)}
+        >
+          <Form.Item name="password" label="Новый пароль" rules={[{ required: true, min: 6 }]}>
+            <Input.Password />
           </Form.Item>
         </Form>
       </Modal>

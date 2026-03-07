@@ -1,7 +1,5 @@
 export type Role = 'USER' | 'DECKER' | 'SPIDER' | 'GRIDGOD';
 
-export type DeviceType = 'COMMLINK' | 'DECK' | 'OTHER';
-
 export type DeviceStatus = 'ACTIVE' | 'BRICKED';
 
 export type TransactionType = 'TRANSFER' | 'SUBSCRIPTION' | 'SALARY' | 'PAYMENT_REQUEST';
@@ -15,6 +13,8 @@ export type SubscriptionType = 'SUBSCRIPTION' | 'SALARY';
 export type HackTargetType = 'PERSONA' | 'HOST';
 
 export type HackSessionStatus = 'ACTIVE' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
+
+export type MessageTargetType = 'PERSONA' | 'HOST';
 
 export interface User {
   id: string;
@@ -56,14 +56,14 @@ export interface Lls {
 export interface Device {
   id: string;
   code: string;
-  type: DeviceType;
+  type: string;
   name?: string | null;
   ownerPersonaId?: string | null;
   status: DeviceStatus;
   brickUntil?: string | null;
   createdAt: string;
   updatedAt?: string;
-  owner?: Persona | null;
+  owner?: { id: string; name: string } | null;
 }
 
 export interface License {
@@ -86,11 +86,12 @@ export interface Host {
   iceLevel: number;
   createdAt: string;
   updatedAt?: string;
-  owner?: Persona | null;
-  spider?: Persona | null;
+  owner?: { id: string; name: string } | null;
+  spider?: { id: string; name: string } | null;
   wallet?: Wallet | null;
   files?: FileRecord[];
   accessTokens?: AccessToken[];
+  _count?: { files: number; accessTokens: number };
 }
 
 export interface FileRecord {
@@ -115,8 +116,8 @@ export interface Wallet {
   hostId?: string | null;
   createdAt?: string;
   updatedAt?: string;
-  persona?: Persona | null;
-  host?: Host | null;
+  persona?: { id: string; name: string } | null;
+  host?: { id: string; name: string } | null;
 }
 
 export interface Transaction {
@@ -145,6 +146,8 @@ export interface Subscription {
   type: SubscriptionType;
   createdAt: string;
   updatedAt?: string;
+  payerPersona?: { id: string; name: string } | null;
+  payeePersona?: { id: string; name: string } | null;
 }
 
 export interface GridLog {
@@ -155,9 +158,9 @@ export interface GridLog {
   targetHostId?: string | null;
   metaJson?: Record<string, unknown> | null;
   createdAt: string;
-  actor?: Persona | null;
-  targetPersona?: Persona | null;
-  targetHost?: Host | null;
+  actor?: { id: string; name: string } | null;
+  targetPersona?: { id: string; name: string } | null;
+  targetHost?: { id: string; name: string } | null;
 }
 
 export interface AdminLog {
@@ -184,6 +187,34 @@ export interface HackSession {
   consumedOperationAt?: string | null;
   createdAt: string;
   updatedAt?: string;
+  attacker?: { id: string; name: string } | null;
+  targetPersona?: { id: string; name: string } | null;
+  targetHost?: { id: string; name: string } | null;
+}
+
+export interface Message {
+  id: string;
+  threadId?: string | null;
+  text: string;
+  senderType: MessageTargetType;
+  senderPersonaId?: string | null;
+  senderHostId?: string | null;
+  receiverType: MessageTargetType;
+  receiverPersonaId?: string | null;
+  receiverHostId?: string | null;
+  createdAt: string;
+  senderPersona?: { id: string; name: string } | null;
+  senderHost?: { id: string; name: string } | null;
+  receiverPersona?: { id: string; name: string } | null;
+  receiverHost?: { id: string; name: string } | null;
+}
+
+export interface MessageThread {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: Message[];
+  _count?: { messages: number };
 }
 
 export interface AccessToken {

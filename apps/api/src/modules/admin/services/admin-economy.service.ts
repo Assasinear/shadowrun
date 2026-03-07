@@ -141,14 +141,41 @@ export class AdminEconomyService {
     return [header, ...rows].join('\n');
   }
 
-  async getAllSubscriptions() {
-    return this.prisma.subscription.findMany({
-      include: {
-        payerPersona: { select: { id: true, name: true } },
-        payeePersona: { select: { id: true, name: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async getAllSubscriptions(filters: {
+    type?: string;
+    payerType?: string;
+    payerId?: string;
+    payeeType?: string;
+    payeeId?: string;
+    page?: number;
+    limit?: number;
+  } = {}) {
+    const page = filters.page ?? 1;
+    const limit = filters.limit ?? 50;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (filters.type) where.type = filters.type;
+    if (filters.payerType) where.payerType = filters.payerType;
+    if (filters.payerId) where.payerId = filters.payerId;
+    if (filters.payeeType) where.payeeType = filters.payeeType;
+    if (filters.payeeId) where.payeeId = filters.payeeId;
+
+    const [items, total] = await Promise.all([
+      this.prisma.subscription.findMany({
+        where,
+        include: {
+          payerPersona: { select: { id: true, name: true } },
+          payeePersona: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.subscription.count({ where }),
+    ]);
+
+    return { items, total, page, limit };
   }
 
   async createSubscription(dto: CreateSubscriptionDto) {
@@ -221,5 +248,52 @@ export class AdminEconomyService {
     });
 
     return { paymentRequest, qrToken: { token: qrToken.token, qrDataUrl } };
+  }
+
+  async createAdminTransaction(dto: {
+    fromWalletId: string;
+    toWalletId: string;
+    amount: number;
+    purpose?: string;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const fromWallet = await tx.wallet.findUnique({ where: { id: dto.fromWalletId } });
+      const toWallet = await tx.wallet.findUnique({ where: { id: dto.toWalletId } });
+      if (!fromWallet || !toWallet) {
+        throw new NotFoundException('Wallet not found');
+      }
+
+      await tx.wallet.update({
+        where: { id: dto.fromWalletId },
+        data: { balance: { decrement: dto.amount } },
+      });
+
+      await tx.wallet.update({
+        where: { id: dto.toWalletId },
+        data: { balance: { increment: dto.amount } },
+      });
+
+      const debit = await tx.transaction.create({
+        data: {
+          walletId: dto.fromWalletId,
+          type: 'TRANSFER',
+          status: 'COMPLETED',
+          amount: -dto.amount,
+          metaJson: { adminTransfer: true, purpose: dto.purpose },
+        },
+      });
+
+      const credit = await tx.transaction.create({
+        data: {
+          walletId: dto.toWalletId,
+          type: 'TRANSFER',
+          status: 'COMPLETED',
+          amount: dto.amount,
+          metaJson: { adminTransfer: true, purpose: dto.purpose },
+        },
+      });
+
+      return { debit, credit };
+    });
   }
 }

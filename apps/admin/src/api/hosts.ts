@@ -1,11 +1,16 @@
 import client from './client';
-import type { Host } from '../types';
+import type { PaginatedResponse, Host } from '../types';
 
 export interface GetHostsParams {
   search?: string;
+  isPublic?: boolean;
+  ownerPersonaId?: string;
+  spiderPersonaId?: string;
+  page?: number;
+  limit?: number;
 }
 
-export async function getHosts(params: GetHostsParams = {}): Promise<Host[]> {
+export async function getHosts(params: GetHostsParams = {}): Promise<PaginatedResponse<Host>> {
   const { data } = await client.get('/admin/hosts', { params });
   return data;
 }
@@ -39,5 +44,14 @@ export async function createAccessToken(hostId: string, body: Record<string, unk
 
 export async function getHostQr(id: string): Promise<{ qrDataUrl: string }> {
   const { data } = await client.get(`/admin/hosts/${id}/qr`);
+  return data;
+}
+
+export async function massDeleteHosts(ids: string[]): Promise<void> {
+  await client.post('/admin/hosts/mass/delete', { ids });
+}
+
+export async function cloneHost(id: string): Promise<Host> {
+  const { data } = await client.post(`/admin/hosts/${id}/clone`);
   return data;
 }
