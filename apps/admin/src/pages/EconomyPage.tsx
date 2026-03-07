@@ -179,15 +179,6 @@ function SubscriptionsTab() {
     onError: () => message.error('Ошибка создания'),
   });
 
-  function makeEntityOptions(type: string) {
-    if (type === 'HOST') {
-      return (data?.items ? [] : []).concat(
-        (hostOptions?.items ?? []).map((h) => ({ value: h.id, label: `${h.name} (Host)` }))
-      );
-    }
-    return [];
-  }
-
   const payerPersonaOptions = (payerOptions?.items ?? []).map((p) => ({ value: p.id, label: p.name }));
   const payeePersonaOptions = (payeeOptions?.items ?? []).map((p) => ({ value: p.id, label: p.name }));
   const hostSelectOptions = (hostOptions?.items ?? []).map((h) => ({ value: h.id, label: h.name }));
