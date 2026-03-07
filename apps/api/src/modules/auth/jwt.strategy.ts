@@ -19,7 +19,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       include: { persona: true },
     });
 
-    if (!user || !user.persona) {
+    if (!user || !user.persona || user.isBlocked) {
       throw new UnauthorizedException();
     }
 

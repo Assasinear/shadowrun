@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { SystemSettingsService } from '../../common/services/system-settings.service';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import {
   AddTargetDto,
@@ -17,6 +18,7 @@ export class DeckingService {
   constructor(
     private prisma: PrismaService,
     private wsGateway: WebSocketGateway,
+    private settings: SystemSettingsService,
   ) {}
 
   async getKnownTargets(personaId: string) {
@@ -81,6 +83,10 @@ export class DeckingService {
   }
 
   async startHack(personaId: string, dto: StartHackDto) {
+    if (!(await this.settings.getBoolean('decking_enabled', true))) {
+      throw new ForbiddenException('Decking is currently disabled');
+    }
+
     // Проверка существования цели
     if (dto.targetType === 'PERSONA') {
       const target = await this.prisma.persona.findUnique({
@@ -280,7 +286,8 @@ export class DeckingService {
       throw new NotFoundException('Attacker wallet not found');
     }
 
-    const stealAmount = Math.floor(Number(session.targetPersona.wallet.balance) * 0.1);
+    const stealPercent = await this.settings.getNumber('steal_percentage', 10);
+    const stealAmount = Math.floor(Number(session.targetPersona.wallet.balance) * (stealPercent / 100));
 
     if (stealAmount <= 0) {
       throw new BadRequestException('Target wallet has insufficient balance');
@@ -370,8 +377,9 @@ export class DeckingService {
       throw new NotFoundException('Device not found');
     }
 
+    const brickDuration = await this.settings.getNumber('brick_duration_seconds', 300);
     const brickUntil = new Date();
-    brickUntil.setMinutes(brickUntil.getMinutes() + 5);
+    brickUntil.setSeconds(brickUntil.getSeconds() + brickDuration);
 
     await this.prisma.device.update({
       where: { id: dto.deviceId },

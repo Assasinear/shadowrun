@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { SystemSettingsModule } from './common/services/system-settings.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { PersonaModule } from './modules/persona/persona.module';
 import { DevicesModule } from './modules/devices/devices.module';
@@ -14,11 +15,13 @@ import { GridgodModule } from './modules/gridgod/gridgod.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { WebSocketModule } from './modules/websocket/websocket.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     PrismaModule,
+    SystemSettingsModule,
     AuthModule,
     PersonaModule,
     DevicesModule,
@@ -32,6 +35,7 @@ import { WebSocketModule } from './modules/websocket/websocket.module';
     NotificationsModule,
     JobsModule,
     WebSocketModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

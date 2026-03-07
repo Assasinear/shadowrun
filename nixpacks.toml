@@ -2,10 +2,10 @@
 nixPkgs = ["nodejs_20", "pnpm"]
 
 [phases.install]
-cmds = ["cd apps/api && pnpm install"]
+cmds = ["cd apps/admin && pnpm install && cd ../../apps/api && pnpm install"]
 
 [phases.build]
-cmds = ["cd apps/api && pnpm prisma generate && pnpm build"]
+cmds = ["cd apps/admin && pnpm build && cd ../../apps/api && pnpm prisma generate && pnpm build"]
 
 [start]
 cmd = "cd apps/api && pnpm prisma migrate deploy && node dist/src/main"

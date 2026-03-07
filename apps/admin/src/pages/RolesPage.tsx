@@ -1,0 +1,184 @@
+import { useState } from 'react';
+import {
+  Card,
+  Button,
+  Space,
+  Table,
+  Modal,
+  Form,
+  Select,
+  Popconfirm,
+  Typography,
+  Alert,
+  message,
+} from 'antd';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getSpecialRoles, assignRole, removeRole } from '../api/roles';
+import { getPersonas } from '../api/personas';
+
+const ROLE_OPTIONS = [
+  { value: 'DECKER', label: 'DECKER' },
+  { value: 'SPIDER', label: 'SPIDER' },
+  { value: 'GRIDGOD', label: 'GRIDGOD' },
+];
+
+export default function RolesPage() {
+  const queryClient = useQueryClient();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form] = Form.useForm();
+  const [personaSearch, setPersonaSearch] = useState('');
+
+  const { data: roles, isLoading } = useQuery({
+    queryKey: ['special-roles'],
+    queryFn: getSpecialRoles,
+  });
+
+  const { data: personaOptions } = useQuery({
+    queryKey: ['personas-select', personaSearch],
+    queryFn: () => getPersonas({ search: personaSearch || undefined, limit: 20 }),
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: ({ personaId, role }: { personaId: string; role: string }) =>
+      assignRole(personaId, role),
+    onSuccess: () => {
+      message.success('Role assigned');
+      queryClient.invalidateQueries({ queryKey: ['special-roles'] });
+      setModalOpen(false);
+      form.resetFields();
+    },
+    onError: () => message.error('Failed to assign role'),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (personaId: string) => removeRole(personaId),
+    onSuccess: () => {
+      message.success('Role removed');
+      queryClient.invalidateQueries({ queryKey: ['special-roles'] });
+    },
+    onError: () => message.error('Failed to remove role'),
+  });
+
+  const personaSelectOptions = (personaOptions?.items ?? []).map((p) => ({
+    value: p.id,
+    label: p.name,
+  }));
+
+  const roleColumns = [
+    {
+      title: 'Persona',
+      dataIndex: 'name',
+      key: 'name',
+      render: (name: string) => (
+        <span style={{ color: '#00ff41', fontFamily: 'monospace' }}>{name}</span>
+      ),
+    },
+    {
+      title: 'Username',
+      dataIndex: 'username',
+      key: 'username',
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 100,
+      render: (_: unknown, record: { id: string; name: string }) => (
+        <Popconfirm
+          title={`Remove role from ${record.name}?`}
+          onConfirm={() => removeMutation.mutate(record.id)}
+        >
+          <Button type="text" icon={<DeleteOutlined />} size="small" danger />
+        </Popconfirm>
+      ),
+    },
+  ];
+
+  function renderRoleCard(roleName: 'DECKER' | 'SPIDER' | 'GRIDGOD', color: string) {
+    const items = roles?.[roleName] ?? [];
+    return (
+      <Card
+        title={
+          <Typography.Text style={{ color, fontFamily: 'monospace', fontSize: 16 }}>
+            {roleName}
+          </Typography.Text>
+        }
+        style={{
+          background: '#1a1a1a',
+          border: `1px solid ${color}33`,
+          flex: 1,
+          minWidth: 300,
+        }}
+        headStyle={{ borderBottom: `1px solid ${color}33` }}
+      >
+        {roleName === 'GRIDGOD' && (
+          <Alert
+            message="Только один активный GRIDGOD разрешен"
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        <Table
+          columns={roleColumns}
+          dataSource={items}
+          rowKey="id"
+          loading={isLoading}
+          pagination={false}
+          size="small"
+        />
+      </Card>
+    );
+  }
+
+  return (
+    <div>
+      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 24 }}>
+        <Typography.Title level={3} style={{ color: '#00ff41', fontFamily: 'monospace', margin: 0 }}>
+          ROLES
+        </Typography.Title>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+          Assign Role
+        </Button>
+      </Space>
+
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {renderRoleCard('DECKER', '#00bfff')}
+          {renderRoleCard('SPIDER', '#ff6600')}
+          {renderRoleCard('GRIDGOD', '#00ff41')}
+        </div>
+      </Space>
+
+      <Modal
+        title="Assign Role"
+        open={modalOpen}
+        onCancel={() => {
+          setModalOpen(false);
+          form.resetFields();
+        }}
+        onOk={() => form.submit()}
+        confirmLoading={assignMutation.isPending}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={(values) => assignMutation.mutate(values)}
+        >
+          <Form.Item name="personaId" label="Persona" rules={[{ required: true }]}>
+            <Select
+              showSearch
+              placeholder="Search persona..."
+              filterOption={false}
+              onSearch={setPersonaSearch}
+              options={personaSelectOptions}
+            />
+          </Form.Item>
+          <Form.Item name="role" label="Role" rules={[{ required: true }]}>
+            <Select options={ROLE_OPTIONS} placeholder="Select role" />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+}

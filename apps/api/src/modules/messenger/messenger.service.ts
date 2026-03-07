@@ -1,11 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { SystemSettingsService } from '../../common/services/system-settings.service';
 import { SendMessageDto } from './dto/messenger.dto';
 import { MessageTargetType } from '@prisma/client';
 
 @Injectable()
 export class MessengerService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private settings: SystemSettingsService,
+  ) {}
 
   async getChats(personaId: string) {
     // Получаем все диалоги где персона является отправителем или получателем
@@ -74,6 +78,10 @@ export class MessengerService {
   }
 
   async sendMessage(personaId: string, dto: SendMessageDto) {
+    if (!(await this.settings.getBoolean('messenger_enabled', true))) {
+      throw new ForbiddenException('Messenger is currently disabled');
+    }
+
     if (dto.text.length > 280) {
       throw new Error('Message text must be <= 280 characters');
     }

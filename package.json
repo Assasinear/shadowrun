@@ -1,11 +1,13 @@
 {
-  "name": "shadowrun-matrix-backend",
+  "name": "shadowrun-matrix",
   "version": "1.0.0",
-  "description": "Backend для LARP Матрица",
+  "description": "Backend + Admin для LARP Матрица",
   "private": true,
   "scripts": {
     "dev": "cd apps/api && pnpm dev",
+    "dev:admin": "cd apps/admin && pnpm dev",
     "build": "cd apps/api && pnpm build",
+    "build:admin": "cd apps/admin && pnpm build",
     "start": "cd apps/api && pnpm start",
     "db:migrate": "cd apps/api && pnpm prisma migrate dev",
     "db:seed": "cd apps/api && pnpm prisma db seed",

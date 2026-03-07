@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { SystemSettingsService } from '../../common/services/system-settings.service';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { StartCounterDto, CompleteCounterDto } from './dto/spider.dto';
 
@@ -8,6 +9,7 @@ export class SpiderService {
   constructor(
     private prisma: PrismaService,
     private wsGateway: WebSocketGateway,
+    private settings: SystemSettingsService,
   ) {}
 
   async getHosts(personaId: string) {
@@ -70,8 +72,9 @@ export class SpiderService {
       );
 
       if (attackerDevice) {
+        const brickDuration = await this.settings.getNumber('brick_duration_seconds', 300);
         const brickUntil = new Date();
-        brickUntil.setMinutes(brickUntil.getMinutes() + 5);
+        brickUntil.setSeconds(brickUntil.getSeconds() + brickDuration);
 
         await this.prisma.device.update({
           where: { id: attackerDevice.id },

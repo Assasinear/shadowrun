@@ -325,6 +325,26 @@ async function main() {
 
   console.log('✅ Grid logs created');
 
+  // Дефолтные системные настройки
+  const defaultSettings = [
+    { key: 'subscription_period_seconds', value: '3600' },
+    { key: 'brick_duration_seconds', value: '300' },
+    { key: 'steal_percentage', value: '10' },
+    { key: 'messenger_enabled', value: 'true' },
+    { key: 'push_notifications_enabled', value: 'true' },
+    { key: 'decking_enabled', value: 'true' },
+  ];
+
+  for (const s of defaultSettings) {
+    await prisma.systemSettings.upsert({
+      where: { key: s.key },
+      update: {},
+      create: s,
+    });
+  }
+
+  console.log('✅ System settings created');
+
   console.log('🎉 Seed completed!');
   console.log('\n📋 Test accounts:');
   console.log('  - gridgod/gridgod (GRIDGOD)');

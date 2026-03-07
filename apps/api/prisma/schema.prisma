@@ -15,8 +15,11 @@ model User {
   username  String   @unique
   password  String // bcrypt hash
   role      Role     @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isBlocked    Boolean  @default(false)
+  totpSecret   String?
+  is2faEnabled Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   persona Persona?
 
@@ -453,4 +456,27 @@ model DeckingKnownTarget {
 
   @@unique([personaId, targetType, targetId])
   @@map("decking_known_targets")
+}
+
+model AdminLog {
+  id           String   @id @default(cuid())
+  action       String
+  adminUserId  String
+  targetType   String?
+  targetId     String?
+  details      Json?
+  createdAt    DateTime @default(now())
+
+  @@index([adminUserId, createdAt])
+  @@index([action, createdAt])
+  @@map("admin_logs")
+}
+
+model SystemSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
 }
