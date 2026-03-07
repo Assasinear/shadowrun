@@ -25,6 +25,7 @@ import FilesPage from './pages/FilesPage';
 import RolesPage from './pages/RolesPage';
 import SettingsPage from './pages/SettingsPage';
 import SecurityPage from './pages/SecurityPage';
+import GraphPage from './pages/GraphPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -79,6 +80,7 @@ export default function App() {
                 <Route path="/payment-requests" element={<PaymentRequestsPage />} />
                 <Route path="/access-tokens" element={<AccessTokensPage />} />
                 <Route path="/licenses" element={<LicensesPage />} />
+                <Route path="/graph" element={<GraphPage />} />
                 <Route path="/logs" element={<LogsPage />} />
                 <Route path="/emergency" element={<EmergencyPage />} />
                 <Route path="/files" element={<FilesPage />} />

@@ -24,6 +24,7 @@ import {
   DollarOutlined,
   KeyOutlined,
   SafetyCertificateOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../hooks/useAuth';
 
@@ -51,6 +52,7 @@ const menuItems = [
   { key: '/files', icon: <FileOutlined />, label: 'Файлы' },
   { key: '/licenses', icon: <SafetyCertificateOutlined />, label: 'Лицензии' },
   { key: '/access-tokens', icon: <KeyOutlined />, label: 'Токены доступа' },
+  { key: '/graph', icon: <ApartmentOutlined />, label: 'Граф связей' },
   { key: '/logs', icon: <FileTextOutlined />, label: 'Логи' },
   { key: '/roles', icon: <UserSwitchOutlined />, label: 'Роли' },
   { key: '/settings', icon: <SettingOutlined />, label: 'Настройки' },

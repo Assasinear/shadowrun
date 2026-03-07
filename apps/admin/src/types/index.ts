@@ -170,6 +170,8 @@ export interface AdminLog {
   targetType?: string | null;
   targetId?: string | null;
   details?: Record<string, unknown> | null;
+  beforeJson?: Record<string, unknown> | null;
+  afterJson?: Record<string, unknown> | null;
   createdAt: string;
 }
 

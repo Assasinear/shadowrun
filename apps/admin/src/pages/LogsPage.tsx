@@ -12,7 +12,7 @@ import {
   Tooltip,
   message,
 } from 'antd';
-import { DownloadOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { DownloadOutlined, InfoCircleOutlined, DiffOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import {
   getGridLogs,
@@ -184,6 +184,60 @@ function GridLogsTab() {
   );
 }
 
+function DiffView({ before, after }: { before?: Record<string, unknown> | null; after?: Record<string, unknown> | null }) {
+  if (!before && !after) return <Typography.Text type="secondary">Нет данных аудита</Typography.Text>;
+
+  const allKeys = new Set([
+    ...Object.keys(before ?? {}),
+    ...Object.keys(after ?? {}),
+  ]);
+
+  const SKIP_KEYS = new Set(['updatedAt', 'createdAt', 'id']);
+
+  const rows: { key: string; old: string; new: string; changed: boolean }[] = [];
+  for (const key of allKeys) {
+    if (SKIP_KEYS.has(key)) continue;
+    const oldVal = before?.[key];
+    const newVal = after?.[key];
+    const oldStr = oldVal !== undefined ? JSON.stringify(oldVal) : '—';
+    const newStr = newVal !== undefined ? JSON.stringify(newVal) : '—';
+    rows.push({ key, old: oldStr, new: newStr, changed: oldStr !== newStr });
+  }
+
+  const changed = rows.filter((r) => r.changed);
+  const unchanged = rows.filter((r) => !r.changed);
+
+  return (
+    <div style={{ padding: '8px 0' }}>
+      {changed.length > 0 && (
+        <Table
+          size="small"
+          pagination={false}
+          dataSource={changed}
+          rowKey="key"
+          style={{ marginBottom: unchanged.length ? 8 : 0 }}
+          columns={[
+            { title: 'Поле', dataIndex: 'key', key: 'key', width: 160, render: (k: string) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{k}</span> },
+            {
+              title: 'Было',
+              dataIndex: 'old',
+              key: 'old',
+              render: (v: string) => <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#ff4d4f', background: 'rgba(255,77,79,0.08)', padding: '1px 4px', borderRadius: 3 }}>{v.length > 80 ? v.substring(0, 80) + '...' : v}</span>,
+            },
+            {
+              title: 'Стало',
+              dataIndex: 'new',
+              key: 'new',
+              render: (v: string) => <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#52c41a', background: 'rgba(82,196,26,0.08)', padding: '1px 4px', borderRadius: 3 }}>{v.length > 80 ? v.substring(0, 80) + '...' : v}</span>,
+            },
+          ]}
+        />
+      )}
+      {changed.length === 0 && <Typography.Text type="secondary">Без изменений полей</Typography.Text>}
+    </div>
+  );
+}
+
 function AdminLogsTab() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -306,8 +360,18 @@ function AdminLogsTab() {
         <Button icon={<DownloadOutlined />} onClick={handleExport}>CSV</Button>
       </Space>
 
-      <Table columns={columns} dataSource={data?.items} rowKey="id" loading={isLoading}
+      <Table
+        columns={columns}
+        dataSource={data?.items}
+        rowKey="id"
+        loading={isLoading}
         size="small"
+        expandable={{
+          expandedRowRender: (record: AdminLog) => (
+            <DiffView before={record.beforeJson} after={record.afterJson} />
+          ),
+          rowExpandable: (record: AdminLog) => !!(record.beforeJson || record.afterJson),
+        }}
         pagination={{ current: page, pageSize, total: data?.total, showSizeChanger: true, showTotal: (total) => `Всего: ${total}`, onChange: (p, ps) => { setPage(p); setPageSize(ps); } }}
       />
     </>

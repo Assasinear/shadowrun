@@ -15,16 +15,25 @@ export class AdminRolesService {
       orderBy: { role: 'asc' },
     });
 
-    const grouped: Record<string, typeof users> = {};
+    const result: Record<string, { id: string; name: string; username: string; userId: string }[]> = {
+      DECKER: [],
+      SPIDER: [],
+      GRIDGOD: [],
+    };
+
     for (const user of users) {
       const role = user.role;
-      if (!grouped[role]) {
-        grouped[role] = [];
+      if (result[role]) {
+        result[role].push({
+          id: user.persona?.id ?? user.id,
+          name: user.persona?.name ?? user.username,
+          username: user.username,
+          userId: user.id,
+        });
       }
-      grouped[role].push(user);
     }
 
-    return grouped;
+    return result;
   }
 
   async changeRole(personaId: string, role: Role) {

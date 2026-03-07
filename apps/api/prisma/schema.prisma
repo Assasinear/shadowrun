@@ -459,6 +459,8 @@ model AdminLog {
   targetType   String?
   targetId     String?
   details      Json?
+  beforeJson   Json?
+  afterJson    Json?
   createdAt    DateTime @default(now())
 
   @@index([adminUserId, createdAt])
