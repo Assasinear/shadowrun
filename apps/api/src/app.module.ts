@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { SystemSettingsModule } from './common/services/system-settings.module';
 import { AppController } from './app.controller';
+import { AdminPanelController } from './admin-panel.controller';
 import { AuthModule } from './modules/auth/auth.module';
 import { PersonaModule } from './modules/persona/persona.module';
 import { DevicesModule } from './modules/devices/devices.module';
@@ -21,6 +24,14 @@ import { AdminModule } from './modules/admin/admin.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', '..', '..', 'admin', 'dist'),
+      serveRoot: '/panel',
+      serveStaticOptions: {
+        index: false,
+        redirect: false,
+      },
+    }),
     PrismaModule,
     SystemSettingsModule,
     AuthModule,
@@ -38,6 +49,6 @@ import { AdminModule } from './modules/admin/admin.module';
     WebSocketModule,
     AdminModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, AdminPanelController],
 })
 export class AppModule {}

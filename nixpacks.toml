@@ -2,10 +2,13 @@
 nixPkgs = ["nodejs_20", "pnpm"]
 
 [phases.install]
-cmds = ["cd apps/admin && pnpm install && cd ../../apps/api && pnpm install"]
+cmds = ["pnpm install --frozen-lockfile || pnpm install"]
 
 [phases.build]
-cmds = ["cd apps/admin && pnpm build && cd ../../apps/api && pnpm prisma generate && pnpm build"]
+cmds = [
+  "cd apps/admin && pnpm install && pnpm build",
+  "cd apps/api && pnpm install && pnpm prisma generate && pnpm build"
+]
 
 [start]
 cmd = "cd apps/api && pnpm prisma migrate deploy && node dist/src/main"
