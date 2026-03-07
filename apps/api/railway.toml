@@ -3,7 +3,7 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "pnpm prisma migrate deploy && pnpm start:prod"
-healthcheckPath = "/api"
+healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3

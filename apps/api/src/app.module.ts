@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { SystemSettingsModule } from './common/services/system-settings.module';
+import { AppController } from './app.controller';
 import { AuthModule } from './modules/auth/auth.module';
 import { PersonaModule } from './modules/persona/persona.module';
 import { DevicesModule } from './modules/devices/devices.module';
@@ -37,5 +38,6 @@ import { AdminModule } from './modules/admin/admin.module';
     WebSocketModule,
     AdminModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule {}
