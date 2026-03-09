@@ -147,4 +147,54 @@ export class AdminEconomyController {
   createAdminTransaction(@Body() body: { fromWalletId: string; toWalletId: string; amount: number; purpose?: string }) {
     return this.service.createAdminTransaction(body);
   }
+
+  @Get('transfers')
+  @ApiOperation({ summary: 'Список переводов с from/to (дедуплицированные)' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'isTheft', required: false, type: Boolean })
+  @ApiQuery({ name: 'isAdmin', required: false, type: Boolean })
+  @ApiQuery({ name: 'dateFrom', required: false })
+  @ApiQuery({ name: 'dateTo', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  getTransfers(
+    @Query('search') search?: string,
+    @Query('isTheft') isTheft?: string,
+    @Query('isAdmin') isAdmin?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.getTransfers({
+      search,
+      isTheft: isTheft === 'true' ? true : isTheft === 'false' ? false : undefined,
+      isAdmin: isAdmin === 'true' ? true : isAdmin === 'false' ? false : undefined,
+      dateFrom,
+      dateTo,
+      page: page ? +page : undefined,
+      limit: limit ? +limit : undefined,
+    });
+  }
+
+  @Get('wallets/:id/transactions')
+  @ApiOperation({ summary: 'История транзакций конкретного кошелька' })
+  @ApiQuery({ name: 'dateFrom', required: false })
+  @ApiQuery({ name: 'dateTo', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  getWalletTransactions(
+    @Param('id') id: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.getWalletTransactions(id, {
+      dateFrom,
+      dateTo,
+      page: page ? +page : undefined,
+      limit: limit ? +limit : undefined,
+    });
+  }
 }

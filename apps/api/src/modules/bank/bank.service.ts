@@ -8,6 +8,7 @@ import {
   ScanQrDto,
   ConfirmPaymentDto,
   NewSubscriptionDto,
+  PayStaticQrDto,
 } from './dto/bank.dto';
 import { WalletOwnerType, Role } from '@prisma/client';
 
@@ -336,6 +337,71 @@ export class BankService {
     }
 
     return result.transaction;
+  }
+
+  async payStaticQr(personaId: string, dto: PayStaticQrDto) {
+    const fromWallet = await this.prisma.wallet.findUnique({ where: { personaId } });
+    if (!fromWallet) throw new NotFoundException('Wallet not found');
+
+    if (Number(fromWallet.balance) < dto.amount) {
+      throw new BadRequestException('Insufficient balance');
+    }
+
+    let toWallet;
+    if (dto.targetType === 'PERSONA') {
+      toWallet = await this.prisma.wallet.findUnique({ where: { personaId: dto.targetId } });
+    } else {
+      toWallet = await this.prisma.wallet.findUnique({ where: { hostId: dto.targetId } });
+    }
+    if (!toWallet) throw new NotFoundException('Target wallet not found');
+
+    if (fromWallet.id === toWallet.id) {
+      throw new BadRequestException('Cannot pay yourself');
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedFrom = await tx.wallet.update({
+        where: { id: fromWallet.id },
+        data: { balance: { decrement: dto.amount } },
+      });
+
+      const updatedTo = await tx.wallet.update({
+        where: { id: toWallet.id },
+        data: { balance: { increment: dto.amount } },
+      });
+
+      await tx.transaction.create({
+        data: {
+          walletId: toWallet.id,
+          type: 'PAYMENT_REQUEST',
+          amount: dto.amount,
+          metaJson: { fromPersonaId: personaId, purpose: dto.purpose ?? null, staticQr: true },
+        },
+      });
+
+      await tx.transaction.create({
+        data: {
+          walletId: fromWallet.id,
+          type: 'PAYMENT_REQUEST',
+          amount: -dto.amount,
+          metaJson: {
+            targetType: dto.targetType,
+            targetId: dto.targetId,
+            purpose: dto.purpose ?? null,
+            staticQr: true,
+          },
+        },
+      });
+
+      return { updatedFrom, updatedTo };
+    });
+
+    this.wsGateway.notifyBalanceUpdate(personaId, Number(result.updatedFrom.balance));
+    if (dto.targetType === 'PERSONA') {
+      this.wsGateway.notifyBalanceUpdate(dto.targetId, Number(result.updatedTo.balance));
+    }
+
+    return { success: true, newBalance: Number(result.updatedFrom.balance) };
   }
 
   async createSubscription(personaId: string, dto: NewSubscriptionDto) {

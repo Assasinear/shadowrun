@@ -65,11 +65,68 @@ export async function deleteSubscription(id: string): Promise<void> {
   await client.delete(`/admin/economy/subscriptions/${id}`);
 }
 
-export async function generatePaymentQr(body: Record<string, unknown>): Promise<{ qrDataUrl: string }> {
+export interface GeneratePaymentQrBody {
+  targetType: 'PERSONA' | 'HOST';
+  targetId: string;
+  amount: number;
+  purpose?: string;
+}
+
+export interface GeneratePaymentQrResult {
+  qrDataUrl: string;
+  payload: {
+    type: 'STATIC_PAYMENT';
+    targetType: 'PERSONA' | 'HOST';
+    targetId: string;
+    targetName: string;
+    amount: number;
+    purpose?: string;
+  };
+}
+
+export async function generatePaymentQr(body: GeneratePaymentQrBody): Promise<GeneratePaymentQrResult> {
   const { data } = await client.post('/admin/economy/qr/payment', body);
   return data;
 }
 
 export async function createAdminTransfer(body: { fromWalletId: string; toWalletId: string; amount: number; purpose?: string }): Promise<void> {
   await client.post('/admin/economy/admin-transfer', body);
+}
+
+export interface TransferParty {
+  id: string;
+  name: string | null;
+  type: 'PERSONA' | 'HOST' | 'WALLET' | 'UNKNOWN';
+}
+
+export interface Transfer {
+  id: string;
+  amount: number | string;
+  status: string;
+  isTheft: boolean;
+  isAdmin: boolean;
+  purpose: string | null;
+  createdAt: string;
+  from: TransferParty | null;
+  to: TransferParty;
+}
+
+export interface GetTransfersParams {
+  search?: string;
+  isTheft?: boolean;
+  isAdmin?: boolean;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  limit?: number;
+}
+
+export async function getTransfers(params: GetTransfersParams = {}): Promise<{ items: Transfer[]; total: number; page: number; limit: number }> {
+  const { data } = await client.get('/admin/economy/transfers', { params });
+  return data;
+}
+
+export async function getWalletTransactions(walletId: string, params: { dateFrom?: string; dateTo?: string; page?: number; limit?: number } = {}): Promise<{ items: Transaction[]; total: number; page: number; limit: number }> {
+  const { data } = await client.get(`/admin/economy/wallets/${walletId}/transactions`, { params });
+  return data;
 }

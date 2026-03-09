@@ -105,6 +105,8 @@ export interface FileRecord {
   iceLevel: number;
   personaId?: string | null;
   hostId?: string | null;
+  persona?: { id: string; name: string } | null;
+  host?: { id: string; name: string } | null;
   createdAt?: string;
   updatedAt?: string;
 }

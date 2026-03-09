@@ -9,6 +9,7 @@ import {
   ScanQrDto,
   ConfirmPaymentDto,
   NewSubscriptionDto,
+  PayStaticQrDto,
 } from './dto/bank.dto';
 
 @ApiTags('Bank - Финансы и платежи')
@@ -155,6 +156,25 @@ export class BankController {
     @Body() dto: ConfirmPaymentDto,
   ) {
     return this.bankService.confirmPayment(user.personaId, dto);
+  }
+
+  @Post('pay-static-qr')
+  @ApiOperation({
+    summary: 'Оплатить статический QR',
+    description: `
+Выполняет прямой перевод по данным из статического QR-кода (без токена в БД).
+
+Статический QR генерируется в админке и содержит: targetType, targetId, amount, purpose.
+Может быть использован неограниченное число раз (например, QR на барной стойке).
+    `,
+  })
+  @ApiResponse({ status: 201, description: 'Платёж выполнен' })
+  @ApiResponse({ status: 400, description: 'Недостаточно средств или неверные данные' })
+  async payStaticQr(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: PayStaticQrDto,
+  ) {
+    return this.bankService.payStaticQr(user.personaId, dto);
   }
 
   @Post('subscriptions/new')

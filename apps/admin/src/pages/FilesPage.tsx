@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Table,
   Button,
@@ -169,8 +170,16 @@ export default function FilesPage() {
       title: 'Owner',
       key: 'owner',
       render: (_, record) => {
-        if (record.personaId) return <Tag color="blue">Persona</Tag>;
-        if (record.hostId) return <Tag color="purple">Host</Tag>;
+        if (record.persona) return (
+          <><Tag color="blue">Persona</Tag>{' '}
+            <Link to={`/personas/${record.persona.id}`} style={{ color: '#00ff41' }}>{record.persona.name}</Link>
+          </>
+        );
+        if (record.host) return (
+          <><Tag color="purple">Host</Tag>{' '}
+            <Link to={`/hosts/${record.host.id}`} style={{ color: '#00ff41' }}>{record.host.name}</Link>
+          </>
+        );
         return '—';
       },
     },

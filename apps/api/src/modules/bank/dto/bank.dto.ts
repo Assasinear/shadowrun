@@ -53,6 +53,26 @@ export class ConfirmPaymentDto {
   token: string;
 }
 
+export class PayStaticQrDto {
+  @ApiProperty({ enum: ['PERSONA', 'HOST'], example: 'PERSONA' })
+  @IsEnum(['PERSONA', 'HOST'])
+  targetType: 'PERSONA' | 'HOST';
+
+  @ApiProperty({ example: 'cuid-of-target' })
+  @IsString()
+  targetId: string;
+
+  @ApiProperty({ example: 10 })
+  @IsNumber()
+  @Min(0.01)
+  amount: number;
+
+  @ApiProperty({ required: false, example: 'Пиво' })
+  @IsOptional()
+  @IsString()
+  purpose?: string;
+}
+
 export class NewSubscriptionDto {
   @ApiProperty({ type: WalletTargetDto })
   @ValidateNested()

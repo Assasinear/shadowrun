@@ -15,9 +15,8 @@ export class SetBalanceDto {
 }
 
 export class DepositDto {
-  @ApiProperty({ example: 1000 })
+  @ApiProperty({ example: 1000, description: 'Положительное — пополнение, отрицательное — списание' })
   @IsNumber()
-  @Min(0)
   amount: number;
 }
 
@@ -55,9 +54,13 @@ export class CreateSubscriptionDto {
 }
 
 export class GeneratePaymentQrDto {
-  @ApiProperty({ example: 'cuid-of-target-persona' })
+  @ApiProperty({ enum: ['PERSONA', 'HOST'], example: 'PERSONA' })
+  @IsEnum(['PERSONA', 'HOST'])
+  targetType: 'PERSONA' | 'HOST';
+
+  @ApiProperty({ example: 'cuid-of-target' })
   @IsString()
-  targetPersonaId: string;
+  targetId: string;
 
   @ApiProperty({ example: 500 })
   @IsNumber()
