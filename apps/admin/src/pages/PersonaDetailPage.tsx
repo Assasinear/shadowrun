@@ -399,7 +399,7 @@ export default function PersonaDetailPage() {
         <Form
           form={licenseForm}
           layout="vertical"
-          onFinish={(values) => licenseMutation.mutate(values)}
+          onFinish={(values) => licenseMutation.mutate({ licenses: [values] })}
         >
           <Form.Item name="type" label="Тип лицензии" rules={[{ required: true }]}>
             <Input />
