@@ -15,7 +15,7 @@ export async function enableDecking(): Promise<void> {
 
 export async function getDeckingStatus(): Promise<{ enabled: boolean }> {
   const { data } = await client.get('/admin/emergency/decking-status');
-  return data;
+  return { enabled: data?.deckingEnabled !== false };
 }
 
 export async function resetAllBricks(): Promise<{ reset: number }> {

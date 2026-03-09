@@ -146,7 +146,7 @@ export default function EmergencyPage() {
                   Decking Control
                 </Typography.Title>
                 <Typography.Text type="secondary">
-                  Toggle the ability for deckers to initiate new hacks.
+                  Toggle the ability for deckers to initiate new hacks. When disabled, starting new hack sessions is blocked by the API.
                 </Typography.Text>
                 <div style={{ marginTop: 8 }}>
                   {loadingStatus ? (
@@ -158,6 +158,11 @@ export default function EmergencyPage() {
                         <Tag color="green">ENABLED</Tag>
                       ) : (
                         <Tag color="red">DISABLED</Tag>
+                      )}
+                      {!isDeckingEnabled && (
+                        <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4, fontSize: 12 }}>
+                          Новые хак-сессии заблокированы.
+                        </Typography.Text>
                       )}
                     </span>
                   )}

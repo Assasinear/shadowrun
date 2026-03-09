@@ -11,7 +11,7 @@ export class AdminEmergencyService {
       data: { status: 'CANCELLED' },
     });
 
-    return { cancelled: result.count };
+    return { terminated: result.count };
   }
 
   async disableDecking() {
