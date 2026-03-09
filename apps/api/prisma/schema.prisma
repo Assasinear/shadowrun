@@ -62,8 +62,6 @@ model Persona {
   ownedHosts  Host[] @relation("HostOwner")
   spiderHosts Host[] @relation("HostSpider")
   deckingKnownTargets DeckingKnownTarget[]
-  subscriptionsAsPayer Subscription[] @relation("SubscriptionPayer")
-  subscriptionsAsPayee Subscription[] @relation("SubscriptionPayee")
   accessTokens AccessToken[]
   paymentRequestsAsCreator PaymentRequest[] @relation("PaymentRequestCreator")
   paymentRequestsAsTarget PaymentRequest[] @relation("PaymentRequestTarget")
@@ -243,8 +241,6 @@ model Subscription {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  payerPersona  Persona? @relation("SubscriptionPayer", fields: [payerId], references: [id], onDelete: Cascade)
-  payeePersona  Persona? @relation("SubscriptionPayee", fields: [payeeId], references: [id], onDelete: Cascade)
   transactions  Transaction[]
 
   @@index([payerType, payerId])
