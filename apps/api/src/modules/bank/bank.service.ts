@@ -269,7 +269,7 @@ export class BankService {
       throw new NotFoundException('Target wallet not found');
     }
 
-    if (fromWallet.balance < pr.amount) {
+    if (Number(fromWallet.balance) < Number(pr.amount)) {
       throw new BadRequestException('Insufficient balance');
     }
 
