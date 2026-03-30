@@ -52,12 +52,7 @@ export class JobsService {
   @Cron(CronExpression.EVERY_MINUTE)
   async processSubscriptions() {
     const now = new Date();
-    const subscriptions = await this.prisma.subscription.findMany({
-      include: {
-        payerPersona: { include: { wallet: true } },
-        payeePersona: { include: { wallet: true } },
-      },
-    });
+    const subscriptions = await this.prisma.subscription.findMany();
 
     for (const sub of subscriptions) {
       const shouldCharge =
@@ -71,8 +66,10 @@ export class JobsService {
       let payerWallet;
       let payeeWallet;
 
-      if (sub.payerType === 'PERSONA' && sub.payerPersona?.wallet) {
-        payerWallet = sub.payerPersona.wallet;
+      if (sub.payerType === 'PERSONA') {
+        payerWallet = await this.prisma.wallet.findUnique({
+          where: { personaId: sub.payerId },
+        });
       } else {
         const host = await this.prisma.host.findUnique({
           where: { id: sub.payerId },
@@ -81,8 +78,10 @@ export class JobsService {
         payerWallet = host?.wallet;
       }
 
-      if (sub.payeeType === 'PERSONA' && sub.payeePersona?.wallet) {
-        payeeWallet = sub.payeePersona.wallet;
+      if (sub.payeeType === 'PERSONA') {
+        payeeWallet = await this.prisma.wallet.findUnique({
+          where: { personaId: sub.payeeId },
+        });
       } else {
         const host = await this.prisma.host.findUnique({
           where: { id: sub.payeeId },

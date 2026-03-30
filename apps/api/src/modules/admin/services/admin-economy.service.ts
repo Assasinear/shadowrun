@@ -161,19 +161,39 @@ export class AdminEconomyService {
     if (filters.payeeType) where.payeeType = filters.payeeType;
     if (filters.payeeId) where.payeeId = filters.payeeId;
 
-    const [items, total] = await Promise.all([
+    const [rawItems, total] = await Promise.all([
       this.prisma.subscription.findMany({
         where,
-        include: {
-          payerPersona: { select: { id: true, name: true } },
-          payeePersona: { select: { id: true, name: true } },
-        },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
       this.prisma.subscription.count({ where }),
     ]);
+
+    const personaIds = new Set<string>();
+    for (const sub of rawItems) {
+      if (sub.payerType === 'PERSONA') personaIds.add(sub.payerId);
+      if (sub.payeeType === 'PERSONA') personaIds.add(sub.payeeId);
+    }
+
+    const personas =
+      personaIds.size > 0
+        ? await this.prisma.persona.findMany({
+            where: { id: { in: [...personaIds] } },
+            select: { id: true, name: true },
+          })
+        : [];
+
+    const personaById = new Map(personas.map((p) => [p.id, p]));
+
+    const items = rawItems.map((sub) => ({
+      ...sub,
+      payerPersona:
+        sub.payerType === 'PERSONA' ? (personaById.get(sub.payerId) ?? null) : null,
+      payeePersona:
+        sub.payeeType === 'PERSONA' ? (personaById.get(sub.payeeId) ?? null) : null,
+    }));
 
     return { items, total, page, limit };
   }
