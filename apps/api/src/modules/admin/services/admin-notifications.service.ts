@@ -1,9 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { WebSocketGateway } from '../../websocket/websocket.gateway';
+
+const BROADCAST_CHUNK = 100;
 
 @Injectable()
 export class AdminNotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly wsGateway: WebSocketGateway,
+  ) {}
 
   async findAll(filters: {
     personaId?: string;
@@ -49,14 +55,25 @@ export class AdminNotificationsService {
       targetIds = allPersonas.map((p) => p.id);
     }
 
-    const data = targetIds.map((personaId) => ({
-      personaId,
-      type: dto.type,
-      payload: dto.payload ?? undefined,
-    }));
+    let created = 0;
+    for (let i = 0; i < targetIds.length; i += BROADCAST_CHUNK) {
+      const chunk = targetIds.slice(i, i + BROADCAST_CHUNK);
+      const rows = await this.prisma.$transaction(
+        chunk.map((personaId) =>
+          this.prisma.notification.create({
+            data: {
+              personaId,
+              type: dto.type,
+              payload: dto.payload ?? undefined,
+            },
+          }),
+        ),
+      );
+      created += rows.length;
+      await this.wsGateway.emitNotificationRecords(rows);
+    }
 
-    const result = await this.prisma.notification.createMany({ data });
-    return { created: result.count };
+    return { created };
   }
 
   async markAllRead(personaId: string) {

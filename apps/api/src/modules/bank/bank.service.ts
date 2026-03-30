@@ -137,10 +137,29 @@ export class BankService {
       return { updatedFrom, updatedTo, transaction };
     });
 
-    // WebSocket уведомления
     this.wsGateway.notifyBalanceUpdate(personaId, Number(result.updatedFrom.balance));
     if (dto.to.type === 'PERSONA') {
       this.wsGateway.notifyBalanceUpdate(dto.to.id, Number(result.updatedTo.balance));
+    }
+
+    const amountNum = Number(dto.amount);
+    try {
+      await this.wsGateway.sendNotification(personaId, {
+        type: 'transfer_sent',
+        payload: {
+          amount: amountNum,
+          toType: dto.to.type,
+          toId: dto.to.id,
+        },
+      });
+      if (dto.to.type === 'PERSONA') {
+        await this.wsGateway.sendNotification(dto.to.id, {
+          type: 'transfer_received',
+          payload: { amount: amountNum, fromPersonaId: personaId },
+        });
+      }
+    } catch (e) {
+      console.warn('transfer notification failed:', e);
     }
 
     return result.transaction;
@@ -336,6 +355,34 @@ export class BankService {
       this.wsGateway.notifyBalanceUpdate(pr.targetPersonaId, Number(result.updatedTo.balance));
     }
 
+    try {
+      await this.wsGateway.sendNotification(personaId, {
+        type: 'payment_request_paid_by_you',
+        payload: {
+          paymentRequestId: pr.id,
+          amount: Number(pr.amount),
+          purpose: pr.purpose,
+        },
+      });
+      if (
+        pr.creatorType === 'PERSONA' &&
+        pr.creatorPersonaId &&
+        pr.creatorPersonaId !== personaId
+      ) {
+        await this.wsGateway.sendNotification(pr.creatorPersonaId, {
+          type: 'payment_request_completed',
+          payload: {
+            paymentRequestId: pr.id,
+            payerPersonaId: personaId,
+            amount: Number(pr.amount),
+            purpose: pr.purpose,
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('payment_request notification failed:', e);
+    }
+
     return result.transaction;
   }
 
@@ -399,6 +446,27 @@ export class BankService {
     this.wsGateway.notifyBalanceUpdate(personaId, Number(result.updatedFrom.balance));
     if (dto.targetType === 'PERSONA') {
       this.wsGateway.notifyBalanceUpdate(dto.targetId, Number(result.updatedTo.balance));
+    }
+
+    const amt = Number(dto.amount);
+    try {
+      await this.wsGateway.sendNotification(personaId, {
+        type: 'static_qr_payment_sent',
+        payload: {
+          amount: amt,
+          targetType: dto.targetType,
+          targetId: dto.targetId,
+          purpose: dto.purpose ?? null,
+        },
+      });
+      if (dto.targetType === 'PERSONA') {
+        await this.wsGateway.sendNotification(dto.targetId, {
+          type: 'static_qr_payment_received',
+          payload: { amount: amt, fromPersonaId: personaId, purpose: dto.purpose ?? null },
+        });
+      }
+    } catch (e) {
+      console.warn('static_qr payment notification failed:', e);
     }
 
     return { success: true, newBalance: Number(result.updatedFrom.balance) };

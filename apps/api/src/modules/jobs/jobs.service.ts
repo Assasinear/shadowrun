@@ -2,51 +2,94 @@ import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
-import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class JobsService {
   constructor(
     private prisma: PrismaService,
     private wsGateway: WebSocketGateway,
-    private notificationsService: NotificationsService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
   async expireHackSessions() {
     const now = new Date();
-    const expired = await this.prisma.hackSession.updateMany({
+    const toExpire = await this.prisma.hackSession.findMany({
       where: {
         status: 'ACTIVE',
         expiresAt: { lt: now },
       },
-      data: {
-        status: 'EXPIRED',
+      select: {
+        id: true,
+        attackerPersonaId: true,
+        targetPersonaId: true,
       },
     });
 
-    if (expired.count > 0) {
-      console.log(`Expired ${expired.count} hack sessions`);
+    if (toExpire.length === 0) {
+      return;
     }
+
+    await this.prisma.hackSession.updateMany({
+      where: { id: { in: toExpire.map((s) => s.id) } },
+      data: { status: 'EXPIRED' },
+    });
+
+    for (const s of toExpire) {
+      try {
+        await this.wsGateway.sendNotification(s.attackerPersonaId, {
+          type: 'hack_session_expired',
+          payload: { sessionId: s.id, role: 'attacker' },
+        });
+        if (s.targetPersonaId) {
+          await this.wsGateway.sendNotification(s.targetPersonaId, {
+            type: 'hack_session_expired',
+            payload: { sessionId: s.id, role: 'target' },
+          });
+        }
+      } catch (e) {
+        console.warn('expireHackSessions notification failed:', e);
+      }
+    }
+
+    console.log(`Expired ${toExpire.length} hack sessions`);
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
   async unbrickDevices() {
     const now = new Date();
-    const unbricked = await this.prisma.device.updateMany({
+    const devices = await this.prisma.device.findMany({
       where: {
         status: 'BRICKED',
         brickUntil: { lt: now },
       },
+      select: { id: true, ownerPersonaId: true, name: true },
+    });
+
+    if (devices.length === 0) {
+      return;
+    }
+
+    await this.prisma.device.updateMany({
+      where: { id: { in: devices.map((d) => d.id) } },
       data: {
         status: 'ACTIVE',
         brickUntil: null,
       },
     });
 
-    if (unbricked.count > 0) {
-      console.log(`Unbricked ${unbricked.count} devices`);
+    for (const d of devices) {
+      if (!d.ownerPersonaId) continue;
+      try {
+        await this.wsGateway.sendNotification(d.ownerPersonaId, {
+          type: 'device_unbricked',
+          payload: { deviceId: d.id, deviceName: d.name },
+        });
+      } catch (e) {
+        console.warn('unbrick notification failed:', e);
+      }
     }
+
+    console.log(`Unbricked ${devices.length} devices`);
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -136,27 +179,29 @@ export class JobsService {
       });
 
       if (updatedPayerWallet && Number(updatedPayerWallet.balance) < 0) {
-        // Уведомления обеим сторонам
         if (sub.payerType === 'PERSONA' && sub.payerId) {
-          await this.notificationsService.createNotification(sub.payerId, 'subscription_negative_balance', {
-            subscriptionId: sub.id,
-            balance: updatedPayerWallet.balance,
-          });
-          this.wsGateway.sendNotification(sub.payerId, {
-            type: 'subscription_negative_balance',
-            payload: { subscriptionId: sub.id, balance: updatedPayerWallet.balance },
-          });
+          try {
+            await this.wsGateway.sendNotification(sub.payerId, {
+              type: 'subscription_negative_balance',
+              payload: {
+                subscriptionId: sub.id,
+                balance: Number(updatedPayerWallet.balance),
+              },
+            });
+          } catch (e) {
+            console.warn('subscription payer notification failed:', e);
+          }
         }
 
         if (sub.payeeType === 'PERSONA' && sub.payeeId) {
-          await this.notificationsService.createNotification(sub.payeeId, 'subscription_payer_negative', {
-            subscriptionId: sub.id,
-            payerId: sub.payerId,
-          });
-          this.wsGateway.sendNotification(sub.payeeId, {
-            type: 'subscription_payer_negative',
-            payload: { subscriptionId: sub.id, payerId: sub.payerId },
-          });
+          try {
+            await this.wsGateway.sendNotification(sub.payeeId, {
+              type: 'subscription_payer_negative',
+              payload: { subscriptionId: sub.id, payerId: sub.payerId },
+            });
+          } catch (e) {
+            console.warn('subscription payee notification failed:', e);
+          }
         }
       }
 

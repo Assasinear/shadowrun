@@ -38,9 +38,10 @@ import { AdminLicensesService } from './services/admin-licenses.service';
 
 import { AdminLogInterceptor } from './admin-log.interceptor';
 import { IpRestrictionGuard } from '../../common/guards/ip-restriction.guard';
+import { WebSocketModule } from '../websocket/websocket.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, WebSocketModule],
   controllers: [
     AdminPersonasController,
     AdminHostsController,

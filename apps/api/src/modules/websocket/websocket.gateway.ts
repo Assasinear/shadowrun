@@ -3,12 +3,12 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
-  ConnectedSocket,
-  MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
+import { Notification } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { SystemSettingsService } from '../../common/services/system-settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @WSGateway({
@@ -27,6 +27,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     private jwtService: JwtService,
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private settings: SystemSettingsService,
   ) {}
 
   async handleConnection(client: Socket) {
@@ -81,14 +82,56 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     console.log(`WebSocket disconnected: ${client.id}`);
   }
 
-  sendNotification(personaId: string, notification: { type: string; payload?: any }) {
-    const sockets = this.personaSockets.get(personaId);
-    if (sockets && sockets.length > 0) {
-      this.notificationsService.createNotification(personaId, notification.type, notification.payload);
+  /** Сохраняет уведомление в БД и доставляет по WebSocket (если включено в настройках). */
+  async sendNotification(personaId: string, notification: { type: string; payload?: any }) {
+    const created = await this.notificationsService.createNotification(
+      personaId,
+      notification.type,
+      notification.payload,
+    );
+    await this.emitNotificationRecord(created);
+    return created;
+  }
+
+  /** Только WebSocket для уже сохранённых записей (например массовая рассылка). */
+  async emitNotificationRecord(record: Notification) {
+    if (!(await this.settings.getBoolean('push_notifications_enabled', true))) {
+      return;
+    }
+    const payload = this.serializeNotification(record);
+    const sockets = this.personaSockets.get(record.personaId);
+    if (sockets?.length) {
       sockets.forEach((socketId) => {
-        this.server.to(socketId).emit('notification:new', notification);
+        this.server.to(socketId).emit('notification:new', payload);
       });
     }
+  }
+
+  async emitNotificationRecords(records: Notification[]) {
+    if (records.length === 0) return;
+    if (!(await this.settings.getBoolean('push_notifications_enabled', true))) {
+      return;
+    }
+    for (const record of records) {
+      const payload = this.serializeNotification(record);
+      const sockets = this.personaSockets.get(record.personaId);
+      sockets?.forEach((socketId) => {
+        this.server.to(socketId).emit('notification:new', payload);
+      });
+    }
+  }
+
+  private serializeNotification(record: Notification) {
+    return JSON.parse(
+      JSON.stringify({
+        id: record.id,
+        personaId: record.personaId,
+        type: record.type,
+        payload: record.payload,
+        readAt: record.readAt,
+        createdAt: record.createdAt,
+      }),
+    );
   }
 
   notifyBalanceUpdate(personaId: string, balance: number) {

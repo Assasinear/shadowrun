@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { GetLogsDto, IssueLicensesDto } from './dto/gridgod.dto';
 
 @Injectable()
 export class GridgodService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private wsGateway: WebSocketGateway,
+  ) {}
 
   async getLogs(dto: GetLogsDto) {
     const where: any = {};
@@ -60,6 +64,23 @@ export class GridgodService {
       },
     });
 
+    try {
+      if (subscription.payerType === 'PERSONA' && subscription.payerId) {
+        await this.wsGateway.sendNotification(subscription.payerId, {
+          type: 'subscription_cancelled_by_grid',
+          payload: { subscriptionId },
+        });
+      }
+      if (subscription.payeeType === 'PERSONA' && subscription.payeeId) {
+        await this.wsGateway.sendNotification(subscription.payeeId, {
+          type: 'subscription_cancelled_by_grid',
+          payload: { subscriptionId },
+        });
+      }
+    } catch (e) {
+      console.warn('subscription_cancelled_by_grid notification failed:', e);
+    }
+
     return { success: true };
   }
 
@@ -92,6 +113,18 @@ export class GridgodService {
         metaJson: { licenses: dto.licenses } as any,
       },
     });
+
+    try {
+      await this.wsGateway.sendNotification(personaId, {
+        type: 'licenses_issued',
+        payload: {
+          count: licenses.length,
+          licenses: licenses.map((l) => ({ id: l.id, type: l.type, name: l.name })),
+        },
+      });
+    } catch (e) {
+      console.warn('licenses_issued notification failed:', e);
+    }
 
     return licenses;
   }

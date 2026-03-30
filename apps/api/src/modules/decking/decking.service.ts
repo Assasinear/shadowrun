@@ -121,16 +121,14 @@ export class DeckingService {
       },
     });
 
-    // Уведомление жертве (non-blocking)
     try {
       if (dto.targetType === 'PERSONA') {
-        this.wsGateway.sendNotification(dto.targetId, {
+        await this.wsGateway.sendNotification(dto.targetId, {
           type: 'hack_started',
           payload: { hackSessionId: session.id, attackerPersonaId: personaId },
         });
       }
 
-      // Уведомление пауку если это хост
       if (dto.targetType === 'HOST') {
         const host = await this.prisma.host.findUnique({
           where: { id: dto.targetId },
@@ -186,6 +184,21 @@ export class DeckingService {
       },
     });
 
+    if (session.targetPersonaId) {
+      try {
+        await this.wsGateway.sendNotification(session.targetPersonaId, {
+          type: 'hack_session_finished',
+          payload: {
+            hackSessionId: sessionId,
+            success: dto.success,
+            attackerPersonaId: personaId,
+          },
+        });
+      } catch (e) {
+        console.warn('hack_session_finished notification failed:', e);
+      }
+    }
+
     return updated;
   }
 
@@ -202,10 +215,23 @@ export class DeckingService {
       throw new BadRequestException('Hack session not active');
     }
 
-    return this.prisma.hackSession.update({
+    const updated = await this.prisma.hackSession.update({
       where: { id: sessionId },
       data: { status: 'CANCELLED' },
     });
+
+    if (session.targetPersonaId) {
+      try {
+        await this.wsGateway.sendNotification(session.targetPersonaId, {
+          type: 'hack_session_cancelled',
+          payload: { hackSessionId: sessionId, attackerPersonaId: personaId },
+        });
+      } catch (e) {
+        console.warn('hack_session_cancelled notification failed:', e);
+      }
+    }
+
+    return updated;
   }
 
   async stealSin(personaId: string, dto: StealSinDto) {
@@ -256,6 +282,15 @@ export class DeckingService {
         metaJson: { hackSessionId: dto.sessionId, fileId: file.id },
       },
     });
+
+    try {
+      await this.wsGateway.sendNotification(session.targetPersona.id, {
+        type: 'sin_stolen_alert',
+        payload: { hackSessionId: dto.sessionId, attackerPersonaId: personaId, fileId: file.id },
+      });
+    } catch (e) {
+      console.warn('sin_stolen_alert notification failed:', e);
+    }
 
     return file;
   }
@@ -345,6 +380,15 @@ export class DeckingService {
       },
     });
 
+    try {
+      await this.wsGateway.sendNotification(session.targetPersona.id, {
+        type: 'funds_stolen_via_hack',
+        payload: { hackSessionId: dto.sessionId, attackerPersonaId: personaId, amount: stealAmount },
+      });
+    } catch (e) {
+      console.warn('funds_stolen_via_hack notification failed:', e);
+    }
+
     this.wsGateway.notifyBalanceUpdate(personaId, Number(attackerWallet.balance) + stealAmount);
     this.wsGateway.notifyBalanceUpdate(
       session.targetPersona.id,
@@ -403,6 +447,15 @@ export class DeckingService {
       },
     });
 
+    try {
+      await this.wsGateway.sendNotification(session.targetPersona.id, {
+        type: 'device_bricked_via_hack',
+        payload: { hackSessionId: dto.sessionId, deviceId: dto.deviceId, attackerPersonaId: personaId, brickUntil },
+      });
+    } catch (e) {
+      console.warn('device_bricked_via_hack notification failed:', e);
+    }
+
     return { success: true, brickUntil };
   }
 
@@ -459,6 +512,21 @@ export class DeckingService {
         metaJson: { hackSessionId: dto.sessionId, fileId: dto.fileId, newFileId: newFile.id },
       },
     });
+
+    if (session.targetPersonaId) {
+      try {
+        await this.wsGateway.sendNotification(session.targetPersonaId, {
+          type: 'file_copied_via_hack',
+          payload: {
+            hackSessionId: dto.sessionId,
+            fileId: dto.fileId,
+            attackerPersonaId: personaId,
+          },
+        });
+      } catch (e) {
+        console.warn('file_copied_via_hack notification failed:', e);
+      }
+    }
 
     return newFile;
   }

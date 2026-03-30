@@ -93,6 +93,20 @@ export class SpiderService {
             metaJson: { hackSessionId: hackSession.id, deviceId: attackerDevice.id },
           },
         });
+
+        try {
+          await this.wsGateway.sendNotification(hackSession.attackerPersonaId, {
+            type: 'device_bricked_by_spider',
+            payload: {
+              hackSessionId: hackSession.id,
+              hostId: host.id,
+              deviceId: attackerDevice.id,
+              brickUntil: brickUntil.toISOString(),
+            },
+          });
+        } catch (e) {
+          console.warn('device_bricked_by_spider notification failed:', e);
+        }
       }
 
       // Завершаем исходную сессию
@@ -101,9 +115,8 @@ export class SpiderService {
         data: { status: 'FAILED' },
       });
 
-      // Уведомление декеру
-      this.wsGateway.sendNotification(hackSession.attackerPersonaId, {
-        type: 'spider_alert',
+      await this.wsGateway.sendNotification(hackSession.attackerPersonaId, {
+        type: 'spider_countered',
         payload: {
           hostId: host.id,
           hackSessionId: hackSession.id,

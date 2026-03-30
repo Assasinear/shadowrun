@@ -126,7 +126,7 @@ export default function SettingsPage() {
 
         <Form.Item
           name="push_notifications_enabled"
-          label="Push-уведомления"
+          label="Real-time уведомления (WebSocket)"
           valuePropName="checked"
         >
           <Switch />

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SystemSettingsService } from '../../common/services/system-settings.service';
+import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { SendMessageDto } from './dto/messenger.dto';
 import { MessageTargetType } from '@prisma/client';
 
@@ -9,6 +10,7 @@ export class MessengerService {
   constructor(
     private prisma: PrismaService,
     private settings: SystemSettingsService,
+    private wsGateway: WebSocketGateway,
   ) {}
 
   async getChats(personaId: string) {
@@ -122,6 +124,21 @@ export class MessengerService {
         metaJson: { messageId: message.id, targetType: dto.targetType },
       },
     });
+
+    if (dto.targetType === 'PERSONA') {
+      try {
+        await this.wsGateway.sendNotification(dto.targetId, {
+          type: 'message_received',
+          payload: {
+            messageId: message.id,
+            senderPersonaId: personaId,
+            textPreview: dto.text.length > 120 ? `${dto.text.slice(0, 120)}…` : dto.text,
+          },
+        });
+      } catch (e) {
+        console.warn('message_received notification failed:', e);
+      }
+    }
 
     return message;
   }
