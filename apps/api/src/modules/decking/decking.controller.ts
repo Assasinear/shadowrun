@@ -76,8 +76,10 @@ export class DeckingController {
 
 **Параметры:**
 - \`targetType\`: PERSONA или HOST
-- \`targetId\`: ID цели
-- \`elementType\`: что ломаем (LLS, FILE, DEVICE и т.д.)
+- \`targetId\`: ID цели (из \`/decking/random\`, \`/decking/known-targets\` или известных)
+
+Что именно «таскать» (файл / девайс / деньги / SIN) — выбирается **после** успеха
+через \`GET /decking/hack/:id/files\` и \`/devices\`, операции — \`POST /decking/op/...\`.
 
 **Уведомления:**
 - Жертве отправляется уведомление о взломе
@@ -117,7 +119,10 @@ export class DeckingController {
 
 **При успехе (\`success: true\`):**
 - Сессия переходит в статус SUCCESS
-- Можно выполнить ОДНУ операцию (steal-sin, transfer-funds, brick-device, download-file)
+- Разведка цели (сессию не тратит):
+  - \`GET /decking/hack/:sessionId/files\` — список файлов
+  - \`GET /decking/hack/:sessionId/devices\` — список устройств
+- Затем ОДНА операция: steal-sin, transfer-funds, brick-device или download-file
 
 **При неудаче (\`success: false\`):**
 - Сессия переходит в статус FAILED
@@ -148,6 +153,48 @@ export class DeckingController {
     @Param('sessionId') sessionId: string,
   ) {
     return this.deckingService.cancelHack(user.personaId, sessionId);
+  }
+
+  @Get('hack/:sessionId/files')
+  @ApiOperation({
+    summary: 'Список файлов цели по сессии взлома',
+    description: `
+Доступно после успешного завершения взлома (\`status: SUCCESS\`), пока операция не потрачена.
+
+**Не потребляет сессию.** Декер выбирает \`fileId\` и вызывает \`POST /decking/op/download-file\`.
+
+Файлы берутся из LLS цели (если PERSONA) или из архива хоста (если HOST).
+    `,
+  })
+  @ApiParam({ name: 'sessionId', description: 'ID сессии взлома' })
+  @ApiResponse({ status: 200, description: 'Файлы цели' })
+  @ApiResponse({ status: 400, description: 'Сессия не SUCCESS или операция уже использована' })
+  async getHackSessionFiles(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.deckingService.getHackSessionFiles(user.personaId, sessionId);
+  }
+
+  @Get('hack/:sessionId/devices')
+  @ApiOperation({
+    summary: 'Список устройств цели по сессии взлома',
+    description: `
+Доступно после успешного завершения взлома (\`status: SUCCESS\`), пока операция не потрачена.
+
+**Не потребляет сессию.** Декер выбирает \`deviceId\` и вызывает \`POST /decking/op/brick-device\`.
+
+Для PERSONA — устройства самой жертвы; для HOST — устройства владельца хоста.
+    `,
+  })
+  @ApiParam({ name: 'sessionId', description: 'ID сессии взлома' })
+  @ApiResponse({ status: 200, description: 'Устройства цели' })
+  @ApiResponse({ status: 400, description: 'Сессия не SUCCESS или операция уже использована' })
+  async getHackSessionDevices(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.deckingService.getHackSessionDevices(user.personaId, sessionId);
   }
 
   @Post('op/steal-sin')
@@ -229,9 +276,10 @@ export class DeckingController {
   @ApiOperation({
     summary: 'Скачать файл из LLS/хоста жертвы',
     description: `
-**Требует успешную сессию взлома LLS персоны или хоста.**
+**Требует успешную сессию взлома** (\`SUCCESS\`, операция ещё не потрачена).
 
-Копирует файл из архива жертвы в LLS атакующего.
+Сначала получите \`fileId\` через \`GET /decking/hack/:sessionId/files\`, затем передайте его сюда.
+Копирует файл из архива цели в LLS атакующего.
 
 ⚠️ Операция потребляет сессию.
     `,

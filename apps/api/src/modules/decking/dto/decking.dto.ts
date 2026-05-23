@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEnum, IsBoolean, IsOptional } from 'class-validator';
+import { IsString, IsEnum, IsBoolean } from 'class-validator';
 
 export class AddTargetDto {
   @ApiProperty({ enum: ['PERSONA', 'HOST'], example: 'PERSONA' })
@@ -19,15 +19,6 @@ export class StartHackDto {
   @ApiProperty({ example: 'target-id' })
   @IsString()
   targetId: string;
-
-  @ApiProperty({ example: 'LLS' })
-  @IsString()
-  elementType: string;
-
-  @ApiProperty({ required: false, example: 'element-id' })
-  @IsOptional()
-  @IsString()
-  elementId?: string;
 }
 
 export class CompleteHackDto {

@@ -11,7 +11,26 @@ import {
   BrickDeviceOpDto,
   DownloadFileDto,
 } from './dto/decking.dto';
-import { HackTargetType } from '@prisma/client';
+import { HackSession, HackTargetType, Prisma } from '@prisma/client';
+
+const hackFileListSelect = {
+  id: true,
+  name: true,
+  type: true,
+  size: true,
+  isPublic: true,
+  iceLevel: true,
+  createdAt: true,
+} satisfies Prisma.FileSelect;
+
+const hackDeviceListSelect = {
+  id: true,
+  type: true,
+  name: true,
+  code: true,
+  status: true,
+  brickUntil: true,
+} satisfies Prisma.DeviceSelect;
 
 @Injectable()
 export class DeckingService {
@@ -114,8 +133,7 @@ export class DeckingService {
         targetType: dto.targetType,
         targetPersonaId: dto.targetType === 'PERSONA' ? dto.targetId : null,
         targetHostId: dto.targetType === 'HOST' ? dto.targetId : null,
-        elementType: dto.elementType,
-        elementId: dto.elementId,
+        elementType: 'HACK',
         status: 'ACTIVE',
         expiresAt,
       },
@@ -147,7 +165,7 @@ export class DeckingService {
         actorPersonaId: personaId,
         targetPersonaId: dto.targetType === 'PERSONA' ? dto.targetId : null,
         targetHostId: dto.targetType === 'HOST' ? dto.targetId : null,
-        metaJson: { hackSessionId: session.id, elementType: dto.elementType },
+        metaJson: { hackSessionId: session.id },
       },
     });
 
@@ -232,6 +250,68 @@ export class DeckingService {
     }
 
     return updated;
+  }
+
+  async getHackSessionFiles(personaId: string, sessionId: string) {
+    const session = await this.loadSessionForLoot(personaId, sessionId);
+
+    let files;
+    if (session.targetType === 'PERSONA' && session.targetPersonaId) {
+      files = await this.prisma.file.findMany({
+        where: { personaId: session.targetPersonaId },
+        select: hackFileListSelect,
+        orderBy: { createdAt: 'desc' },
+      });
+    } else if (session.targetType === 'HOST' && session.targetHostId) {
+      files = await this.prisma.file.findMany({
+        where: { hostId: session.targetHostId },
+        select: hackFileListSelect,
+        orderBy: { createdAt: 'desc' },
+      });
+    } else {
+      files = [];
+    }
+
+    return {
+      sessionId: session.id,
+      targetType: session.targetType,
+      targetPersonaId: session.targetPersonaId,
+      targetHostId: session.targetHostId,
+      files,
+      operationConsumed: !!session.consumedOperationAt,
+    };
+  }
+
+  async getHackSessionDevices(personaId: string, sessionId: string) {
+    const session = await this.loadSessionForLoot(personaId, sessionId);
+
+    let ownerPersonaId: string | null = null;
+    if (session.targetType === 'PERSONA') {
+      ownerPersonaId = session.targetPersonaId;
+    } else if (session.targetType === 'HOST' && session.targetHostId) {
+      const host = await this.prisma.host.findUnique({
+        where: { id: session.targetHostId },
+        select: { ownerPersonaId: true },
+      });
+      ownerPersonaId = host?.ownerPersonaId ?? null;
+    }
+
+    const devices = ownerPersonaId
+      ? await this.prisma.device.findMany({
+          where: { ownerPersonaId },
+          select: hackDeviceListSelect,
+          orderBy: [{ type: 'asc' }, { createdAt: 'desc' }],
+        })
+      : [];
+
+    return {
+      sessionId: session.id,
+      targetType: session.targetType,
+      targetPersonaId: session.targetPersonaId,
+      targetHostId: session.targetHostId,
+      devices,
+      operationConsumed: !!session.consumedOperationAt,
+    };
   }
 
   async stealSin(personaId: string, dto: StealSinDto) {
@@ -399,26 +479,28 @@ export class DeckingService {
   }
 
   async brickDeviceOp(personaId: string, dto: BrickDeviceOpDto) {
-    const session = await this.prisma.hackSession.findUnique({
-      where: { id: dto.sessionId },
-      include: { targetPersona: { include: { devices: true } } },
-    });
+    const session = await this.loadSessionForLoot(personaId, dto.sessionId);
 
-    if (!session || session.attackerPersonaId !== personaId) {
-      throw new ForbiddenException('Invalid hack session');
+    let ownerPersonaId: string | null = null;
+    if (session.targetType === 'PERSONA') {
+      ownerPersonaId = session.targetPersonaId;
+    } else if (session.targetType === 'HOST' && session.targetHostId) {
+      const host = await this.prisma.host.findUnique({
+        where: { id: session.targetHostId },
+        select: { ownerPersonaId: true },
+      });
+      ownerPersonaId = host?.ownerPersonaId ?? null;
     }
 
-    if (session.status !== 'SUCCESS' || session.consumedOperationAt) {
-      throw new BadRequestException('Hack session operation already consumed or not successful');
-    }
-
-    if (!session.targetPersona) {
+    if (!ownerPersonaId) {
       throw new NotFoundException('Target persona not found');
     }
 
-    const device = session.targetPersona.devices.find((d) => d.id === dto.deviceId);
+    const device = await this.prisma.device.findFirst({
+      where: { id: dto.deviceId, ownerPersonaId },
+    });
     if (!device) {
-      throw new NotFoundException('Device not found');
+      throw new NotFoundException('Device not found on hack target');
     }
 
     const brickDuration = await this.settings.getNumber('brick_duration_seconds', 300);
@@ -442,13 +524,14 @@ export class DeckingService {
       data: {
         type: 'device_bricked_via_hack',
         actorPersonaId: personaId,
-        targetPersonaId: session.targetPersona.id,
+        targetPersonaId: ownerPersonaId,
+        targetHostId: session.targetHostId,
         metaJson: { hackSessionId: dto.sessionId, deviceId: dto.deviceId },
       },
     });
 
     try {
-      await this.wsGateway.sendNotification(session.targetPersona.id, {
+      await this.wsGateway.sendNotification(ownerPersonaId, {
         type: 'device_bricked_via_hack',
         payload: { hackSessionId: dto.sessionId, deviceId: dto.deviceId, attackerPersonaId: personaId, brickUntil },
       });
@@ -460,31 +543,11 @@ export class DeckingService {
   }
 
   async downloadFile(personaId: string, dto: DownloadFileDto) {
-    const session = await this.prisma.hackSession.findUnique({
-      where: { id: dto.sessionId },
-      include: {
-        targetPersona: { include: { files: true } },
-        targetHost: { include: { files: true } },
-      },
-    });
+    const session = await this.loadSessionForLoot(personaId, dto.sessionId);
 
-    if (!session || session.attackerPersonaId !== personaId) {
-      throw new ForbiddenException('Invalid hack session');
-    }
-
-    if (session.status !== 'SUCCESS' || session.consumedOperationAt) {
-      throw new BadRequestException('Hack session operation already consumed or not successful');
-    }
-
-    let sourceFile;
-    if (session.targetType === 'PERSONA' && session.targetPersona) {
-      sourceFile = session.targetPersona.files.find((f) => f.id === dto.fileId);
-    } else if (session.targetType === 'HOST' && session.targetHost) {
-      sourceFile = session.targetHost.files.find((f) => f.id === dto.fileId);
-    }
-
+    const sourceFile = await this.findTargetFileForSession(session, dto.fileId);
     if (!sourceFile) {
-      throw new NotFoundException('File not found');
+      throw new NotFoundException('File not found on hack target');
     }
 
     const newFile = await this.prisma.file.create({
@@ -529,5 +592,39 @@ export class DeckingService {
     }
 
     return newFile;
+  }
+
+  private async loadSessionForLoot(personaId: string, sessionId: string): Promise<HackSession> {
+    const session = await this.prisma.hackSession.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session || session.attackerPersonaId !== personaId) {
+      throw new ForbiddenException('Invalid hack session');
+    }
+
+    if (session.status !== 'SUCCESS') {
+      throw new BadRequestException('Hack session must be successful to access target files');
+    }
+
+    if (session.consumedOperationAt) {
+      throw new BadRequestException('Hack session operation already consumed');
+    }
+
+    return session;
+  }
+
+  private async findTargetFileForSession(session: HackSession, fileId: string) {
+    if (session.targetType === 'PERSONA' && session.targetPersonaId) {
+      return this.prisma.file.findFirst({
+        where: { id: fileId, personaId: session.targetPersonaId },
+      });
+    }
+    if (session.targetType === 'HOST' && session.targetHostId) {
+      return this.prisma.file.findFirst({
+        where: { id: fileId, hostId: session.targetHostId },
+      });
+    }
+    return null;
   }
 }

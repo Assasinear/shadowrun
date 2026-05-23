@@ -20,6 +20,26 @@ export class PersonaService {
         licenses: true,
         blogPosts: { orderBy: { createdAt: 'desc' }, take: 20 },
         files: true,
+        ownedHosts: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            isPublic: true,
+            iceLevel: true,
+            spiderPersonaId: true,
+          },
+        },
+        spiderHosts: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            isPublic: true,
+            iceLevel: true,
+            ownerPersonaId: true,
+          },
+        },
       },
     });
 

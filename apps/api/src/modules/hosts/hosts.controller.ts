@@ -1,9 +1,9 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { HostsService } from './hosts.service';
-import { OpenArchiveDto } from './dto/hosts.dto';
+import { OpenArchiveDto, UpdateHostDto, HostBlogPostDto } from './dto/hosts.dto';
 import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Hosts - Хосты (серверы)')
@@ -55,6 +55,62 @@ export class HostsController {
     return this.hostsService.getHost(hostId, user.personaId, user.role as any);
   }
 
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'Обновить хост (владелец)',
+    description: `
+Доступно только владельцу хоста (\`ownerPersonaId === personaId\`).
+
+Можно изменить:
+- \`description\` — описание
+- \`isPublic\` — публичность
+- \`spiderPersonaId\` — назначить/снять паука (передать \`null\` чтобы снять)
+    `,
+  })
+  @ApiParam({ name: 'id', description: 'ID хоста' })
+  @ApiResponse({ status: 200, description: 'Хост обновлён' })
+  @ApiResponse({ status: 403, description: 'Не владелец' })
+  async updateHost(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') hostId: string,
+    @Body() dto: UpdateHostDto,
+  ) {
+    return this.hostsService.updateHost(hostId, user.personaId, dto);
+  }
+
+  @Post(':id/blog')
+  @ApiOperation({
+    summary: 'Создать пост в блоге хоста',
+    description: 'Доступно владельцу или пауку хоста. Максимум 70 символов.',
+  })
+  @ApiParam({ name: 'id', description: 'ID хоста' })
+  @ApiResponse({ status: 201, description: 'Пост создан' })
+  @ApiResponse({ status: 403, description: 'Не владелец/паук' })
+  async createBlogPost(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') hostId: string,
+    @Body() dto: HostBlogPostDto,
+  ) {
+    return this.hostsService.createBlogPost(hostId, user.personaId, dto);
+  }
+
+  @Delete(':id/blog/:postId')
+  @ApiOperation({
+    summary: 'Удалить пост из блога хоста',
+    description: 'Доступно владельцу или пауку хоста.',
+  })
+  @ApiParam({ name: 'id', description: 'ID хоста' })
+  @ApiParam({ name: 'postId', description: 'ID поста' })
+  @ApiResponse({ status: 200, description: 'Пост удалён' })
+  @ApiResponse({ status: 403, description: 'Не владелец/паук' })
+  async deleteBlogPost(
+    @CurrentUser() user: CurrentUserPayload,
+    @Param('id') hostId: string,
+    @Param('postId') postId: string,
+  ) {
+    return this.hostsService.deleteBlogPost(hostId, postId, user.personaId);
+  }
+
   @Post(':id/files/:fileId/public/toggle')
   @ApiOperation({
     summary: 'Переключить публичность файла хоста',
@@ -77,11 +133,11 @@ export class HostsController {
     summary: 'Выдать доступ к архиву хоста',
     description: `
 Создаёт токен доступа (AccessToken) для указанной персоны.
-Позволяет владельцу/пауку открыть доступ к приватным файлам.
 
-Токен действует 24 часа.
+**Только владелец или паук хоста** могут открыть архив. Токен действует 24 часа.
     `,
   })
+  @ApiResponse({ status: 403, description: 'Не владелец и не паук хоста' })
   @ApiParam({ name: 'id', description: 'ID хоста' })
   @ApiResponse({
     status: 201,

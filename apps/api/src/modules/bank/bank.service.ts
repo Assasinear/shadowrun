@@ -473,9 +473,33 @@ export class BankService {
   }
 
   async createSubscription(personaId: string, dto: NewSubscriptionDto) {
-    const payerWallet = await this.prisma.wallet.findUnique({
-      where: { personaId: dto.payer.id },
-    });
+    if (dto.payer.type === 'PERSONA') {
+      if (dto.payer.id !== personaId) {
+        throw new ForbiddenException('You can only create subscriptions from your own persona');
+      }
+    } else {
+      const host = await this.prisma.host.findUnique({
+        where: { id: dto.payer.id },
+        select: { ownerPersonaId: true },
+      });
+      if (!host) {
+        throw new NotFoundException('Payer host not found');
+      }
+      if (host.ownerPersonaId !== personaId) {
+        throw new ForbiddenException('Only the host owner can create subscriptions from this host');
+      }
+    }
+
+    let payerWallet;
+    if (dto.payer.type === 'PERSONA') {
+      payerWallet = await this.prisma.wallet.findUnique({
+        where: { personaId: dto.payer.id },
+      });
+    } else {
+      payerWallet = await this.prisma.wallet.findUnique({
+        where: { hostId: dto.payer.id },
+      });
+    }
 
     if (!payerWallet) {
       throw new NotFoundException('Payer wallet not found');

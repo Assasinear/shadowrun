@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { OpenArchiveDto } from './dto/hosts.dto';
+import { OpenArchiveDto, UpdateHostDto, HostBlogPostDto } from './dto/hosts.dto';
 import { QrService } from '../persona/qr.service';
 import { Role } from '@prisma/client';
 
@@ -36,7 +36,7 @@ export class HostsService {
         owner: true,
         spider: true,
         wallet: true,
-        blogPosts: true,
+        blogPosts: { orderBy: { createdAt: 'desc' }, take: 50 },
         files: true,
       },
     });
@@ -45,32 +45,127 @@ export class HostsService {
       throw new NotFoundException('Host not found');
     }
 
-    // Доступ: владелец, паук, или decker (если есть активная сессия взлома)
     const isOwner = host.ownerPersonaId === personaId;
     const isSpider = host.spiderPersonaId === personaId;
-    const isDecker = role === 'DECKER';
 
-    if (!isOwner && !isSpider && !isDecker) {
-      // Проверка активной сессии взлома для декера
-      if (isDecker) {
-        const activeSession = await this.prisma.hackSession.findFirst({
-          where: {
-            targetType: 'HOST',
-            targetHostId: hostId,
-            attackerPersonaId: personaId,
-            status: 'ACTIVE',
-          },
-        });
+    if (isOwner || isSpider || role === 'GRIDGOD') {
+      return host;
+    }
 
-        if (!activeSession) {
-          throw new ForbiddenException('Access denied');
-        }
-      } else {
-        throw new ForbiddenException('Access denied');
+    if (role === 'DECKER') {
+      const activeSession = await this.prisma.hackSession.findFirst({
+        where: {
+          targetType: 'HOST',
+          targetHostId: hostId,
+          attackerPersonaId: personaId,
+          status: { in: ['ACTIVE', 'SUCCESS'] },
+        },
+      });
+      if (activeSession) {
+        return host;
       }
     }
 
-    return host;
+    throw new ForbiddenException('Access denied');
+  }
+
+  async updateHost(hostId: string, personaId: string, dto: UpdateHostDto) {
+    const host = await this.prisma.host.findUnique({ where: { id: hostId } });
+    if (!host) {
+      throw new NotFoundException('Host not found');
+    }
+    if (host.ownerPersonaId !== personaId) {
+      throw new ForbiddenException('Only the owner can update this host');
+    }
+
+    if (dto.spiderPersonaId) {
+      const spider = await this.prisma.persona.findUnique({
+        where: { id: dto.spiderPersonaId },
+      });
+      if (!spider) {
+        throw new BadRequestException('Spider persona not found');
+      }
+    }
+
+    const updated = await this.prisma.host.update({
+      where: { id: hostId },
+      data: {
+        description: dto.description ?? undefined,
+        isPublic: dto.isPublic ?? undefined,
+        spiderPersonaId:
+          dto.spiderPersonaId === undefined ? undefined : dto.spiderPersonaId,
+      },
+    });
+
+    await this.prisma.gridLog.create({
+      data: {
+        type: 'host_updated',
+        actorPersonaId: personaId,
+        targetHostId: hostId,
+        metaJson: {
+          description: dto.description ?? null,
+          isPublic: dto.isPublic ?? null,
+          spiderPersonaId: dto.spiderPersonaId ?? null,
+        },
+      },
+    });
+
+    return updated;
+  }
+
+  async createBlogPost(hostId: string, personaId: string, dto: HostBlogPostDto) {
+    const host = await this.prisma.host.findUnique({ where: { id: hostId } });
+    if (!host) {
+      throw new NotFoundException('Host not found');
+    }
+    if (host.ownerPersonaId !== personaId && host.spiderPersonaId !== personaId) {
+      throw new ForbiddenException('Only the owner or spider can post for the host');
+    }
+
+    const post = await this.prisma.blogPost.create({
+      data: { hostId, text: dto.text },
+    });
+
+    await this.prisma.gridLog.create({
+      data: {
+        type: 'host_blog_post_created',
+        actorPersonaId: personaId,
+        targetHostId: hostId,
+        metaJson: { postId: post.id },
+      },
+    });
+
+    return post;
+  }
+
+  async deleteBlogPost(hostId: string, postId: string, personaId: string) {
+    const host = await this.prisma.host.findUnique({ where: { id: hostId } });
+    if (!host) {
+      throw new NotFoundException('Host not found');
+    }
+    if (host.ownerPersonaId !== personaId && host.spiderPersonaId !== personaId) {
+      throw new ForbiddenException('Only the owner or spider can delete host posts');
+    }
+
+    const post = await this.prisma.blogPost.findFirst({
+      where: { id: postId, hostId },
+    });
+    if (!post) {
+      throw new NotFoundException('Blog post not found');
+    }
+
+    await this.prisma.blogPost.delete({ where: { id: postId } });
+
+    await this.prisma.gridLog.create({
+      data: {
+        type: 'host_blog_post_deleted',
+        actorPersonaId: personaId,
+        targetHostId: hostId,
+        metaJson: { postId },
+      },
+    });
+
+    return { success: true };
   }
 
   async toggleFilePublic(hostId: string, fileId: string, personaId: string) {
@@ -109,7 +204,10 @@ export class HostsService {
       throw new NotFoundException('Host not found');
     }
 
-    // Упрощённая логика: создаём AccessToken
+    if (host.ownerPersonaId !== personaId && host.spiderPersonaId !== personaId) {
+      throw new ForbiddenException('Only the owner or spider can open the archive');
+    }
+
     const token = `AT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24);
