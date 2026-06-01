@@ -28,10 +28,27 @@ export class DeckingController {
     summary: 'Получить известные цели',
     description: `
 Возвращает список целей (персон и хостов), которые декер добавил в свой список.
+Для каждой цели: \`name\`, \`iceLevel\` (у персоны — из LLS, у хоста — с хоста).
+
 Цели можно добавлять через \`/decking/add-target\` или находить через \`/decking/random\`.
     `,
   })
-  @ApiResponse({ status: 200, description: 'Список известных целей' })
+  @ApiResponse({
+    status: 200,
+    description: 'Список известных целей',
+    schema: {
+      example: [
+        {
+          id: 'kt123',
+          targetType: 'PERSONA',
+          targetId: 'p123',
+          name: 'John Runner',
+          iceLevel: 3,
+          createdAt: '2026-01-21T20:00:00.000Z',
+        },
+      ],
+    },
+  })
   async getKnownTargets(@CurrentUser() user: CurrentUserPayload) {
     return this.deckingService.getKnownTargets(user.personaId);
   }

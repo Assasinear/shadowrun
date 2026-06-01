@@ -41,9 +41,60 @@ export class DeckingService {
   ) {}
 
   async getKnownTargets(personaId: string) {
-    return this.prisma.deckingKnownTarget.findMany({
+    const targets = await this.prisma.deckingKnownTarget.findMany({
       where: { personaId },
       orderBy: { createdAt: 'desc' },
+    });
+
+    if (targets.length === 0) {
+      return [];
+    }
+
+    const personaIds = targets
+      .filter((t) => t.targetType === 'PERSONA')
+      .map((t) => t.targetId);
+    const hostIds = targets.filter((t) => t.targetType === 'HOST').map((t) => t.targetId);
+
+    type KnownPersona = { id: string; name: string; lls: { iceLevel: number } | null };
+    type KnownHost = { id: string; name: string; iceLevel: number };
+
+    const [personas, hosts] = await Promise.all([
+      personaIds.length > 0
+        ? this.prisma.persona.findMany({
+            where: { id: { in: personaIds } },
+            select: { id: true, name: true, lls: { select: { iceLevel: true } } },
+          })
+        : Promise.resolve([] as KnownPersona[]),
+      hostIds.length > 0
+        ? this.prisma.host.findMany({
+            where: { id: { in: hostIds } },
+            select: { id: true, name: true, iceLevel: true },
+          })
+        : Promise.resolve([] as KnownHost[]),
+    ]);
+
+    const personaById = new Map<string, KnownPersona>(
+      personas.map((p) => [p.id, p] as [string, KnownPersona]),
+    );
+    const hostById = new Map<string, KnownHost>(
+      hosts.map((h) => [h.id, h] as [string, KnownHost]),
+    );
+
+    return targets.map((t) => {
+      if (t.targetType === 'PERSONA') {
+        const persona = personaById.get(t.targetId);
+        return {
+          ...t,
+          name: persona?.name ?? null,
+          iceLevel: persona?.lls?.iceLevel ?? 0,
+        };
+      }
+      const host = hostById.get(t.targetId);
+      return {
+        ...t,
+        name: host?.name ?? null,
+        iceLevel: host?.iceLevel ?? 0,
+      };
     });
   }
 
