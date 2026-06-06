@@ -112,7 +112,7 @@ export class DeckingController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Сессия взлома создана',
+    description: 'Сессия взлома создана. Поле `id` — это sessionId для complete/cancel/op и разведки.',
     schema: {
       example: {
         id: 'session123',

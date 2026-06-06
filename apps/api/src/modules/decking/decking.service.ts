@@ -157,7 +157,8 @@ export class DeckingService {
       throw new ForbiddenException('Decking is currently disabled');
     }
 
-    // Проверка существования цели
+    let targetHost: { id: string; name: string; spiderPersonaId: string | null } | null = null;
+
     if (dto.targetType === 'PERSONA') {
       const target = await this.prisma.persona.findUnique({
         where: { id: dto.targetId },
@@ -167,10 +168,11 @@ export class DeckingService {
         throw new NotFoundException('Target persona not found');
       }
     } else {
-      const target = await this.prisma.host.findUnique({
+      targetHost = await this.prisma.host.findUnique({
         where: { id: dto.targetId },
+        select: { id: true, name: true, spiderPersonaId: true },
       });
-      if (!target) {
+      if (!targetHost) {
         throw new NotFoundException('Target host not found');
       }
     }
@@ -198,13 +200,28 @@ export class DeckingService {
         });
       }
 
-      if (dto.targetType === 'HOST') {
-        const host = await this.prisma.host.findUnique({
-          where: { id: dto.targetId },
+      if (dto.targetType === 'HOST' && targetHost?.spiderPersonaId) {
+        const attacker = await this.prisma.persona.findUnique({
+          where: { id: personaId },
+          select: { name: true },
         });
-        if (host?.spiderPersonaId) {
-          this.wsGateway.sendSpiderAlert(host.spiderPersonaId, host.id, session.id);
-        }
+
+        this.wsGateway.sendSpiderAlert(
+          targetHost.spiderPersonaId,
+          targetHost.id,
+          session.id,
+        );
+
+        await this.wsGateway.sendNotification(targetHost.spiderPersonaId, {
+          type: 'spider_hack_alert',
+          payload: {
+            hackSessionId: session.id,
+            hostId: targetHost.id,
+            hostName: targetHost.name,
+            attackerPersonaId: personaId,
+            attackerName: attacker?.name ?? null,
+          },
+        });
       }
     } catch (e) {
       console.warn('WebSocket notification failed:', e);

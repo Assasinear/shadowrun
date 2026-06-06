@@ -21,6 +21,7 @@ export class MessengerController {
 Каждый чат содержит:
 - \`targetType\` - тип собеседника (PERSONA или HOST)
 - \`targetId\` - ID собеседника
+- \`targetName\` - имя персоны или хоста
 - \`lastMessage\` - последнее сообщение в чате
     `,
   })
@@ -32,6 +33,7 @@ export class MessengerController {
         {
           targetType: 'PERSONA',
           targetId: 'persona123',
+          targetName: 'John Runner',
           lastMessage: { id: 'msg1', text: 'Привет!', createdAt: '2026-01-21T20:00:00Z' },
         },
       ],

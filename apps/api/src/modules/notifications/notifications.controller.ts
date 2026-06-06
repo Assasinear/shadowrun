@@ -19,6 +19,7 @@ export class NotificationsController {
 
 **Типы уведомлений (примеры):**
 - \`hack_started\`, \`hack_session_finished\`, \`hack_session_cancelled\`, \`hack_session_expired\`
+- \`spider_hack_alert\` — взлом хоста, где персона назначена пауком (также WS \`spider:alert\`)
 - \`spider_countered\` — паук сорвал взлом на хосте
 - \`subscription_negative_balance\`, \`subscription_payer_negative\`
 - \`transfer_sent\`, \`transfer_received\`, \`payment_request_completed\`, \`static_qr_payment_received\`

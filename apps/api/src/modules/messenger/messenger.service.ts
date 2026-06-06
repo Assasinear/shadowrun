@@ -52,7 +52,43 @@ export class MessengerService {
       }
     }
 
-    return Array.from(chats.values());
+    const chatList = Array.from(chats.values());
+    if (chatList.length === 0) {
+      return [];
+    }
+
+    const personaIds = chatList
+      .filter((c) => c.targetType === 'PERSONA')
+      .map((c) => c.targetId as string);
+    const hostIds = chatList
+      .filter((c) => c.targetType === 'HOST')
+      .map((c) => c.targetId as string);
+
+    const [personas, hosts] = await Promise.all([
+      personaIds.length > 0
+        ? this.prisma.persona.findMany({
+            where: { id: { in: personaIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([] as { id: string; name: string }[]),
+      hostIds.length > 0
+        ? this.prisma.host.findMany({
+            where: { id: { in: hostIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([] as { id: string; name: string }[]),
+    ]);
+
+    const personaNameById = new Map(personas.map((p) => [p.id, p.name] as [string, string]));
+    const hostNameById = new Map(hosts.map((h) => [h.id, h.name] as [string, string]));
+
+    return chatList.map((chat) => ({
+      ...chat,
+      targetName:
+        chat.targetType === 'PERSONA'
+          ? (personaNameById.get(chat.targetId) ?? null)
+          : (hostNameById.get(chat.targetId) ?? null),
+    }));
   }
 
   async getChat(personaId: string, targetType: MessageTargetType, targetId: string) {
@@ -127,11 +163,17 @@ export class MessengerService {
 
     if (dto.targetType === 'PERSONA') {
       try {
+        const sender = await this.prisma.persona.findUnique({
+          where: { id: personaId },
+          select: { name: true },
+        });
+
         await this.wsGateway.sendNotification(dto.targetId, {
           type: 'message_received',
           payload: {
             messageId: message.id,
             senderPersonaId: personaId,
+            senderName: sender?.name ?? null,
             textPreview: dto.text.length > 120 ? `${dto.text.slice(0, 120)}…` : dto.text,
           },
         });
