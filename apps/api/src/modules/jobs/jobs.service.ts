@@ -22,6 +22,7 @@ export class JobsService {
         id: true,
         attackerPersonaId: true,
         targetPersonaId: true,
+        targetHostId: true,
       },
     });
 
@@ -45,6 +46,18 @@ export class JobsService {
             type: 'hack_session_expired',
             payload: { sessionId: s.id, role: 'target' },
           });
+        }
+        if (s.targetHostId) {
+          const host = await this.prisma.host.findUnique({
+            where: { id: s.targetHostId },
+            select: { spiderPersonaId: true },
+          });
+          if (host?.spiderPersonaId) {
+            await this.wsGateway.sendNotification(host.spiderPersonaId, {
+              type: 'hack_session_expired',
+              payload: { sessionId: s.id, role: 'spider', hostId: s.targetHostId },
+            });
+          }
         }
       } catch (e) {
         console.warn('expireHackSessions notification failed:', e);

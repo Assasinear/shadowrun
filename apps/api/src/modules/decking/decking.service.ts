@@ -285,6 +285,28 @@ export class DeckingService {
       }
     }
 
+    if (session.targetHostId) {
+      const host = await this.prisma.host.findUnique({
+        where: { id: session.targetHostId },
+        select: { spiderPersonaId: true },
+      });
+      if (host?.spiderPersonaId) {
+        try {
+          await this.wsGateway.sendNotification(host.spiderPersonaId, {
+            type: 'hack_session_finished',
+            payload: {
+              hackSessionId: sessionId,
+              success: dto.success,
+              attackerPersonaId: personaId,
+              hostId: session.targetHostId,
+            },
+          });
+        } catch (e) {
+          console.warn('hack_session_finished spider notification failed:', e);
+        }
+      }
+    }
+
     return updated;
   }
 
@@ -314,6 +336,27 @@ export class DeckingService {
         });
       } catch (e) {
         console.warn('hack_session_cancelled notification failed:', e);
+      }
+    }
+
+    if (session.targetHostId) {
+      const host = await this.prisma.host.findUnique({
+        where: { id: session.targetHostId },
+        select: { spiderPersonaId: true },
+      });
+      if (host?.spiderPersonaId) {
+        try {
+          await this.wsGateway.sendNotification(host.spiderPersonaId, {
+            type: 'hack_session_cancelled',
+            payload: {
+              hackSessionId: sessionId,
+              attackerPersonaId: personaId,
+              hostId: session.targetHostId,
+            },
+          });
+        } catch (e) {
+          console.warn('hack_session_cancelled spider notification failed:', e);
+        }
       }
     }
 
