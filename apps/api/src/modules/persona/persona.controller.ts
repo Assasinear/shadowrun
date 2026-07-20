@@ -32,6 +32,7 @@ export class PersonaController {
     description: `
 Возвращает полную информацию о персоне текущего пользователя, включая:
 - Основные данные (имя, аватар, адрес, профессия)
+- role (роль пользователя: USER | DECKER | SPIDER | GRIDGOD)
 - LLS (личная локальная сеть) с SIN
 - Кошелёк с балансом
 - Лицензии
@@ -39,7 +40,7 @@ export class PersonaController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Информация о персоне',
+    description: 'Информация о персоне (включая role)',
   })
   async getMe(@CurrentUser() user: CurrentUserPayload) {
     return this.personaService.getMe(user.personaId);

@@ -41,6 +41,7 @@ export interface Persona {
   wallet?: Wallet | null;
   devices?: Device[];
   licenses?: License[];
+  files?: FileRecord[];
 }
 
 export interface Lls {

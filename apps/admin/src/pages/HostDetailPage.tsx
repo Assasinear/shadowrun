@@ -17,6 +17,7 @@ import {
   Switch,
   Image,
   Select,
+  Popconfirm,
   message,
 } from 'antd';
 import {
@@ -24,13 +25,30 @@ import {
   QrcodeOutlined,
   PlusOutlined,
   CopyOutlined,
+  EditOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getHost, addHostFile, createAccessToken, getHostQr, cloneHost } from '../api/hosts';
+import {
+  getHost,
+  updateHost,
+  createAccessToken,
+  getHostQr,
+  cloneHost,
+} from '../api/hosts';
 import { getPersonas } from '../api/personas';
+import { createFile, updateFile, deleteFile } from '../api/files';
 import { setBalance } from '../api/economy';
 import dayjs from 'dayjs';
 import type { FileRecord, AccessToken } from '../types';
+
+const FILE_TYPES = [
+  { value: 'text', label: 'Text' },
+  { value: 'image', label: 'Image' },
+  { value: 'audio', label: 'Audio' },
+  { value: 'video', label: 'Video' },
+  { value: 'other', label: 'Other' },
+];
 
 export default function HostDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -38,18 +56,32 @@ export default function HostDetailPage() {
   const queryClient = useQueryClient();
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [qrImage, setQrImage] = useState<string | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [fileModalOpen, setFileModalOpen] = useState(false);
+  const [editingFile, setEditingFile] = useState<FileRecord | null>(null);
   const [tokenModalOpen, setTokenModalOpen] = useState(false);
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
+  const [editForm] = Form.useForm();
   const [fileForm] = Form.useForm();
   const [tokenForm] = Form.useForm();
   const [balanceForm] = Form.useForm();
+  const [personaSearch, setPersonaSearch] = useState('');
   const [tokenPersonaSearch, setTokenPersonaSearch] = useState('');
+
+  const { data: personaOptions } = useQuery({
+    queryKey: ['personas-select', personaSearch],
+    queryFn: () => getPersonas({ search: personaSearch || undefined, limit: 20 }),
+  });
 
   const { data: tokenPersonaOptions } = useQuery({
     queryKey: ['personas-select', tokenPersonaSearch],
     queryFn: () => getPersonas({ search: tokenPersonaSearch || undefined, limit: 20 }),
   });
+
+  const personaSelectOptions = (personaOptions?.items ?? []).map((p) => ({
+    value: p.id,
+    label: p.name,
+  }));
 
   const tokenPersonaSelectOptions = (tokenPersonaOptions?.items ?? []).map((p) => ({
     value: p.id,
@@ -62,22 +94,54 @@ export default function HostDetailPage() {
     enabled: !!id,
   });
 
-  const addFileMutation = useMutation({
-    mutationFn: (values: Record<string, unknown>) => addHostFile(id!, values),
+  const invHost = () => queryClient.invalidateQueries({ queryKey: ['host', id] });
+
+  const updateMutation = useMutation({
+    mutationFn: (values: Record<string, unknown>) => updateHost(id!, values),
     onSuccess: () => {
-      message.success('File added');
-      queryClient.invalidateQueries({ queryKey: ['host', id] });
-      setFileModalOpen(false);
-      fileForm.resetFields();
+      message.success('Хост обновлён');
+      invHost();
+      setEditModalOpen(false);
     },
-    onError: () => message.error('Failed to add file'),
+    onError: () => message.error('Ошибка обновления'),
+  });
+
+  const addFileMutation = useMutation({
+    mutationFn: (values: Record<string, unknown>) =>
+      createFile({ ...values, hostId: id }),
+    onSuccess: () => {
+      message.success('Файл добавлен');
+      invHost();
+      closeFileModal();
+    },
+    onError: () => message.error('Ошибка добавления файла'),
+  });
+
+  const updateFileMutation = useMutation({
+    mutationFn: ({ fileId, values }: { fileId: string; values: Record<string, unknown> }) =>
+      updateFile(fileId, values),
+    onSuccess: () => {
+      message.success('Файл обновлён');
+      invHost();
+      closeFileModal();
+    },
+    onError: () => message.error('Ошибка обновления файла'),
+  });
+
+  const deleteFileMutation = useMutation({
+    mutationFn: deleteFile,
+    onSuccess: () => {
+      message.success('Файл удалён');
+      invHost();
+    },
+    onError: () => message.error('Ошибка удаления файла'),
   });
 
   const createTokenMutation = useMutation({
     mutationFn: (values: Record<string, unknown>) => createAccessToken(id!, values),
     onSuccess: () => {
       message.success('Access token created');
-      queryClient.invalidateQueries({ queryKey: ['host', id] });
+      invHost();
       setTokenModalOpen(false);
       tokenForm.resetFields();
     },
@@ -88,7 +152,7 @@ export default function HostDetailPage() {
     mutationFn: (balance: number) => setBalance(host!.wallet!.id, balance),
     onSuccess: () => {
       message.success('Balance updated');
-      queryClient.invalidateQueries({ queryKey: ['host', id] });
+      invHost();
       setBalanceModalOpen(false);
     },
     onError: () => message.error('Failed to update balance'),
@@ -102,6 +166,44 @@ export default function HostDetailPage() {
     },
     onError: () => message.error('Ошибка клонирования'),
   });
+
+  function openEdit() {
+    if (!host) return;
+    editForm.setFieldsValue({
+      name: host.name,
+      description: host.description,
+      isPublic: host.isPublic,
+      ownerPersonaId: host.ownerPersonaId,
+      spiderPersonaId: host.spiderPersonaId,
+      iceLevel: host.iceLevel,
+    });
+    setEditModalOpen(true);
+  }
+
+  function closeFileModal() {
+    setFileModalOpen(false);
+    setEditingFile(null);
+    fileForm.resetFields();
+  }
+
+  function openAddFile() {
+    setEditingFile(null);
+    fileForm.resetFields();
+    setFileModalOpen(true);
+  }
+
+  function openEditFile(file: FileRecord) {
+    setEditingFile(file);
+    fileForm.setFieldsValue({
+      name: file.name,
+      type: file.type,
+      content: file.content,
+      isPublic: file.isPublic,
+      iceLevel: file.iceLevel,
+      redeemCode: file.redeemCode,
+    });
+    setFileModalOpen(true);
+  }
 
   const handleGenerateQr = async () => {
     try {
@@ -125,6 +227,9 @@ export default function HostDetailPage() {
         <Typography.Title level={3} style={{ color: '#00ff41', fontFamily: 'monospace', margin: 0 }}>
           {host.name}
         </Typography.Title>
+        <Button icon={<EditOutlined />} onClick={openEdit}>
+          Редактировать
+        </Button>
         <Button icon={<QrcodeOutlined />} onClick={handleGenerateQr}>
           QR
         </Button>
@@ -195,7 +300,7 @@ export default function HostDetailPage() {
           title="Files"
           style={{ background: '#1a1a1a', border: '1px solid #1a3a1a' }}
           extra={
-            <Button size="small" icon={<PlusOutlined />} onClick={() => setFileModalOpen(true)}>
+            <Button size="small" icon={<PlusOutlined />} onClick={openAddFile}>
               Add File
             </Button>
           }
@@ -222,6 +327,27 @@ export default function HostDetailPage() {
                 dataIndex: 'redeemCode',
                 key: 'redeemCode',
                 render: (v: string) => v ?? '—',
+              },
+              {
+                title: '',
+                key: 'actions',
+                width: 80,
+                render: (_: unknown, record: FileRecord) => (
+                  <Space size="small">
+                    <Button
+                      type="text"
+                      icon={<EditOutlined />}
+                      size="small"
+                      onClick={() => openEditFile(record)}
+                    />
+                    <Popconfirm
+                      title="Удалить файл?"
+                      onConfirm={() => deleteFileMutation.mutate(record.id)}
+                    >
+                      <Button type="text" icon={<DeleteOutlined />} size="small" danger />
+                    </Popconfirm>
+                  </Space>
+                ),
               },
             ]}
           />
@@ -285,22 +411,77 @@ export default function HostDetailPage() {
       </Modal>
 
       <Modal
-        title="Add File"
+        title="Редактировать хост"
+        open={editModalOpen}
+        onCancel={() => { setEditModalOpen(false); editForm.resetFields(); }}
+        onOk={() => editForm.submit()}
+        confirmLoading={updateMutation.isPending}
+        width={600}
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+          onFinish={(values) => updateMutation.mutate(values)}
+        >
+          <Form.Item name="name" label="Название" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="description" label="Описание">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item name="isPublic" label="Публичный" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item name="ownerPersonaId" label="Владелец">
+            <Select
+              showSearch
+              allowClear
+              placeholder="Поиск..."
+              filterOption={false}
+              onSearch={setPersonaSearch}
+              options={personaSelectOptions}
+            />
+          </Form.Item>
+          <Form.Item name="spiderPersonaId" label="Spider">
+            <Select
+              showSearch
+              allowClear
+              placeholder="Поиск..."
+              filterOption={false}
+              onSearch={setPersonaSearch}
+              options={personaSelectOptions}
+            />
+          </Form.Item>
+          <Form.Item name="iceLevel" label="ICE Level">
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={editingFile ? 'Редактировать файл' : 'Добавить файл'}
         open={fileModalOpen}
-        onCancel={() => setFileModalOpen(false)}
+        onCancel={closeFileModal}
         onOk={() => fileForm.submit()}
-        confirmLoading={addFileMutation.isPending}
+        confirmLoading={addFileMutation.isPending || updateFileMutation.isPending}
+        width={600}
       >
         <Form
           form={fileForm}
           layout="vertical"
-          onFinish={(values) => addFileMutation.mutate(values)}
+          onFinish={(values) => {
+            if (editingFile) {
+              updateFileMutation.mutate({ fileId: editingFile.id, values });
+            } else {
+              addFileMutation.mutate(values);
+            }
+          }}
         >
           <Form.Item name="name" label="File Name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
           <Form.Item name="type" label="Type">
-            <Input />
+            <Select options={FILE_TYPES} allowClear placeholder="Select type" />
           </Form.Item>
           <Form.Item name="content" label="Content">
             <Input.TextArea rows={3} />
@@ -310,6 +491,9 @@ export default function HostDetailPage() {
           </Form.Item>
           <Form.Item name="iceLevel" label="ICE Level" initialValue={0}>
             <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="redeemCode" label="Redeem Code">
+            <Input />
           </Form.Item>
         </Form>
       </Modal>

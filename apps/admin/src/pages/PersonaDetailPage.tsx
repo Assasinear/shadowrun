@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Descriptions,
   Typography,
@@ -15,6 +15,7 @@ import {
   Input,
   InputNumber,
   Select,
+  Switch,
   Popconfirm,
   message,
   Image,
@@ -37,9 +38,18 @@ import {
   removeLicense,
   resetPassword,
 } from '../api/personas';
+import { createFile, updateFile, deleteFile } from '../api/files';
 import { setBalance } from '../api/economy';
 import dayjs from 'dayjs';
-import type { License, Device } from '../types';
+import type { License, FileRecord } from '../types';
+
+const FILE_TYPES = [
+  { value: 'text', label: 'Text' },
+  { value: 'image', label: 'Image' },
+  { value: 'audio', label: 'Audio' },
+  { value: 'video', label: 'Video' },
+  { value: 'other', label: 'Other' },
+];
 
 export default function PersonaDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -52,11 +62,14 @@ export default function PersonaDetailPage() {
   const [licenseModalOpen, setLicenseModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [fileModalOpen, setFileModalOpen] = useState(false);
+  const [editingFile, setEditingFile] = useState<FileRecord | null>(null);
   const [balanceForm] = Form.useForm();
   const [roleForm] = Form.useForm();
   const [licenseForm] = Form.useForm();
   const [editForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
+  const [fileForm] = Form.useForm();
 
   const { data: persona, isLoading, error } = useQuery({
     queryKey: ['persona', id],
@@ -64,11 +77,13 @@ export default function PersonaDetailPage() {
     enabled: !!id,
   });
 
+  const invPersona = () => queryClient.invalidateQueries({ queryKey: ['persona', id] });
+
   const updateMutation = useMutation({
     mutationFn: (values: Record<string, unknown>) => updatePersona(id!, values),
     onSuccess: () => {
       message.success('Persona updated');
-      queryClient.invalidateQueries({ queryKey: ['persona', id] });
+      invPersona();
     },
     onError: () => message.error('Update failed'),
   });
@@ -77,7 +92,7 @@ export default function PersonaDetailPage() {
     mutationFn: (role: string) => changeRole(id!, role),
     onSuccess: () => {
       message.success('Role changed');
-      queryClient.invalidateQueries({ queryKey: ['persona', id] });
+      invPersona();
       setRoleModalOpen(false);
     },
     onError: () => message.error('Failed to change role'),
@@ -87,7 +102,7 @@ export default function PersonaDetailPage() {
     mutationFn: (balance: number) => setBalance(persona!.wallet!.id, balance),
     onSuccess: () => {
       message.success('Balance updated');
-      queryClient.invalidateQueries({ queryKey: ['persona', id] });
+      invPersona();
       setBalanceModalOpen(false);
     },
     onError: () => message.error('Failed to update balance'),
@@ -97,7 +112,7 @@ export default function PersonaDetailPage() {
     mutationFn: (values: Record<string, unknown>) => issueLicenses(id!, values),
     onSuccess: () => {
       message.success('License issued');
-      queryClient.invalidateQueries({ queryKey: ['persona', id] });
+      invPersona();
       setLicenseModalOpen(false);
       licenseForm.resetFields();
     },
@@ -108,7 +123,7 @@ export default function PersonaDetailPage() {
     mutationFn: (licenseId: string) => removeLicense(id!, licenseId),
     onSuccess: () => {
       message.success('License removed');
-      queryClient.invalidateQueries({ queryKey: ['persona', id] });
+      invPersona();
     },
     onError: () => message.error('Failed to remove license'),
   });
@@ -122,6 +137,62 @@ export default function PersonaDetailPage() {
     },
     onError: () => message.error('Ошибка сброса пароля'),
   });
+
+  const createFileMutation = useMutation({
+    mutationFn: (values: Record<string, unknown>) =>
+      createFile({ ...values, personaId: id }),
+    onSuccess: () => {
+      message.success('Файл добавлен');
+      invPersona();
+      closeFileModal();
+    },
+    onError: () => message.error('Ошибка добавления файла'),
+  });
+
+  const updateFileMutation = useMutation({
+    mutationFn: ({ fileId, values }: { fileId: string; values: Record<string, unknown> }) =>
+      updateFile(fileId, values),
+    onSuccess: () => {
+      message.success('Файл обновлён');
+      invPersona();
+      closeFileModal();
+    },
+    onError: () => message.error('Ошибка обновления файла'),
+  });
+
+  const deleteFileMutation = useMutation({
+    mutationFn: deleteFile,
+    onSuccess: () => {
+      message.success('Файл удалён');
+      invPersona();
+    },
+    onError: () => message.error('Ошибка удаления файла'),
+  });
+
+  function closeFileModal() {
+    setFileModalOpen(false);
+    setEditingFile(null);
+    fileForm.resetFields();
+  }
+
+  function openAddFile() {
+    setEditingFile(null);
+    fileForm.resetFields();
+    setFileModalOpen(true);
+  }
+
+  function openEditFile(file: FileRecord) {
+    setEditingFile(file);
+    fileForm.setFieldsValue({
+      name: file.name,
+      type: file.type,
+      content: file.content,
+      isPublic: file.isPublic,
+      iceLevel: file.iceLevel,
+      redeemCode: file.redeemCode,
+    });
+    setFileModalOpen(true);
+  }
 
   const handleGenerateQr = async () => {
     try {
@@ -259,6 +330,62 @@ export default function PersonaDetailPage() {
           ) : (
             <Typography.Text type="secondary">No wallet</Typography.Text>
           )}
+        </Card>
+
+        <Card
+          title="Files"
+          style={{ background: '#1a1a1a', border: '1px solid #1a3a1a' }}
+          extra={
+            <Button size="small" icon={<PlusOutlined />} onClick={openAddFile}>
+              Add File
+            </Button>
+          }
+        >
+          <Table
+            dataSource={persona.files ?? []}
+            rowKey="id"
+            size="small"
+            pagination={false}
+            columns={[
+              { title: 'Name', dataIndex: 'name', key: 'name' },
+              { title: 'Type', dataIndex: 'type', key: 'type', render: (v: string) => v ?? '—' },
+              {
+                title: 'Public',
+                dataIndex: 'isPublic',
+                key: 'isPublic',
+                render: (v: boolean) =>
+                  v ? <Tag color="green">Yes</Tag> : <Tag>No</Tag>,
+              },
+              { title: 'ICE', dataIndex: 'iceLevel', key: 'iceLevel' },
+              {
+                title: 'Redeem Code',
+                dataIndex: 'redeemCode',
+                key: 'redeemCode',
+                render: (v: string) => v ?? '—',
+              },
+              {
+                title: '',
+                key: 'actions',
+                width: 80,
+                render: (_: unknown, record: FileRecord) => (
+                  <Space size="small">
+                    <Button
+                      type="text"
+                      icon={<EditOutlined />}
+                      size="small"
+                      onClick={() => openEditFile(record)}
+                    />
+                    <Popconfirm
+                      title="Удалить файл?"
+                      onConfirm={() => deleteFileMutation.mutate(record.id)}
+                    >
+                      <Button type="text" icon={<DeleteOutlined />} size="small" danger />
+                    </Popconfirm>
+                  </Space>
+                ),
+              },
+            ]}
+          />
         </Card>
 
         <Card
@@ -434,6 +561,46 @@ export default function PersonaDetailPage() {
           <Form.Item name="address" label="Адрес"><Input /></Form.Item>
           <Form.Item name="profession" label="Профессия"><Input /></Form.Item>
           <Form.Item name="extraInfo" label="Доп. информация"><Input.TextArea rows={2} /></Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={editingFile ? 'Редактировать файл' : 'Добавить файл'}
+        open={fileModalOpen}
+        onCancel={closeFileModal}
+        onOk={() => fileForm.submit()}
+        confirmLoading={createFileMutation.isPending || updateFileMutation.isPending}
+        width={600}
+      >
+        <Form
+          form={fileForm}
+          layout="vertical"
+          onFinish={(values) => {
+            if (editingFile) {
+              updateFileMutation.mutate({ fileId: editingFile.id, values });
+            } else {
+              createFileMutation.mutate(values);
+            }
+          }}
+        >
+          <Form.Item name="name" label="Name" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="type" label="Type">
+            <Select options={FILE_TYPES} allowClear placeholder="Select type" />
+          </Form.Item>
+          <Form.Item name="content" label="Content">
+            <Input.TextArea rows={4} />
+          </Form.Item>
+          <Form.Item name="isPublic" label="Public" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item name="iceLevel" label="ICE Level" initialValue={0}>
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="redeemCode" label="Redeem Code">
+            <Input />
+          </Form.Item>
         </Form>
       </Modal>
 

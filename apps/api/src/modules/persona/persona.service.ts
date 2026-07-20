@@ -14,6 +14,7 @@ export class PersonaService {
     const persona = await this.prisma.persona.findUnique({
       where: { id: personaId },
       include: {
+        user: { select: { role: true } },
         lls: true,
         wallet: true,
         devices: true,
@@ -47,7 +48,8 @@ export class PersonaService {
       throw new NotFoundException('Persona not found');
     }
 
-    return persona;
+    const { user, ...rest } = persona;
+    return { ...rest, role: user.role };
   }
 
   async updateMe(personaId: string, dto: UpdatePersonaDto) {
