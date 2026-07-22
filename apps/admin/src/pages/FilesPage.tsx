@@ -13,6 +13,8 @@ import {
   Switch,
   Popconfirm,
   Typography,
+  Descriptions,
+  Image,
   message,
 } from 'antd';
 import {
@@ -20,6 +22,7 @@ import {
   SearchOutlined,
   DeleteOutlined,
   EditOutlined,
+  EyeOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getFiles, createFile, updateFile, deleteFile } from '../api/files';
@@ -47,6 +50,7 @@ export default function FilesPage() {
   const [filterRedeem, setFilterRedeem] = useState<string | undefined>();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingFile, setEditingFile] = useState<FileRecord | null>(null);
+  const [viewingFile, setViewingFile] = useState<FileRecord | null>(null);
   const [form] = Form.useForm();
   const [personaSearch, setPersonaSearch] = useState('');
   const [hostSearch, setHostSearch] = useState('');
@@ -200,9 +204,15 @@ export default function FilesPage() {
     {
       title: 'Actions',
       key: 'actions',
-      width: 120,
+      width: 140,
       render: (_, record) => (
         <Space size="small">
+          <Button
+            type="text"
+            icon={<EyeOutlined />}
+            size="small"
+            onClick={() => setViewingFile(record)}
+          />
           <Button
             type="text"
             icon={<EditOutlined />}
@@ -305,6 +315,90 @@ export default function FilesPage() {
           showTotal: (total) => `Total: ${total}`,
         }}
       />
+
+      <Modal
+        title={viewingFile ? `Файл: ${viewingFile.name}` : 'Просмотр файла'}
+        open={!!viewingFile}
+        onCancel={() => setViewingFile(null)}
+        footer={[
+          <Button key="close" onClick={() => setViewingFile(null)}>
+            Закрыть
+          </Button>,
+          <Button
+            key="edit"
+            type="primary"
+            icon={<EditOutlined />}
+            onClick={() => {
+              if (viewingFile) {
+                openEdit(viewingFile);
+                setViewingFile(null);
+              }
+            }}
+          >
+            Редактировать
+          </Button>,
+        ]}
+        width={700}
+      >
+        {viewingFile && (
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Descriptions column={2} size="small" bordered>
+              <Descriptions.Item label="ID" span={2}>{viewingFile.id}</Descriptions.Item>
+              <Descriptions.Item label="Name">{viewingFile.name}</Descriptions.Item>
+              <Descriptions.Item label="Type">{viewingFile.type ?? '—'}</Descriptions.Item>
+              <Descriptions.Item label="ICE">{viewingFile.iceLevel}</Descriptions.Item>
+              <Descriptions.Item label="Public">
+                {viewingFile.isPublic ? <Tag color="green">Yes</Tag> : <Tag>No</Tag>}
+              </Descriptions.Item>
+              <Descriptions.Item label="Size">{viewingFile.size ?? '—'}</Descriptions.Item>
+              <Descriptions.Item label="Redeem Code">{viewingFile.redeemCode ?? '—'}</Descriptions.Item>
+              <Descriptions.Item label="Owner" span={2}>
+                {viewingFile.persona ? (
+                  <><Tag color="blue">Persona</Tag>{' '}
+                    <Link to={`/personas/${viewingFile.persona.id}`} style={{ color: '#00ff41' }}>
+                      {viewingFile.persona.name}
+                    </Link>
+                  </>
+                ) : viewingFile.host ? (
+                  <><Tag color="purple">Host</Tag>{' '}
+                    <Link to={`/hosts/${viewingFile.host.id}`} style={{ color: '#00ff41' }}>
+                      {viewingFile.host.name}
+                    </Link>
+                  </>
+                ) : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Created">
+                {viewingFile.createdAt ? dayjs(viewingFile.createdAt).format('DD.MM.YYYY HH:mm') : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Updated">
+                {viewingFile.updatedAt ? dayjs(viewingFile.updatedAt).format('DD.MM.YYYY HH:mm') : '—'}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div>
+              <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                Content
+              </Typography.Text>
+              {!viewingFile.content ? (
+                <Typography.Text type="secondary">Пусто</Typography.Text>
+              ) : viewingFile.type === 'image' || /^data:image\//i.test(viewingFile.content) ? (
+                <Image
+                  src={viewingFile.content}
+                  alt={viewingFile.name}
+                  style={{ maxWidth: '100%', maxHeight: 400 }}
+                />
+              ) : (
+                <Input.TextArea
+                  value={viewingFile.content}
+                  readOnly
+                  autoSize={{ minRows: 4, maxRows: 16 }}
+                  style={{ fontFamily: 'monospace' }}
+                />
+              )}
+            </div>
+          </Space>
+        )}
+      </Modal>
 
       <Modal
         title={editingFile ? 'Edit File' : 'Create File'}
